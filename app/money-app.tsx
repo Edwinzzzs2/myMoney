@@ -948,10 +948,6 @@ export function MoneyApp() {
           )}
         </div>
 
-        <Button type="button" variant="outline" className="h-10 w-full bg-white/70 dark:border-white/10 dark:bg-white/[0.045]" onClick={exportVisibleCsv}>
-          <Download className="h-4 w-4" />
-          导出数据
-        </Button>
       </div>
     )
   }
@@ -985,6 +981,7 @@ export function MoneyApp() {
 
         <SettingGroup title="数据管理">
           <SettingRow icon={Download} label="数据导出" detail="按行程导出 CSV / ZIP" active={settingsPanel === 'export'} onClick={() => setSettingsPanel('export')} />
+          <SettingRow icon={Archive} label="归档数据" detail={`${archivedItemCount} 项归档`} active={settingsPanel === 'archive'} onClick={() => setSettingsPanel('archive')} />
           <SettingRow icon={Trash2} label="清空历史数据" danger detail="保留分类与行程" onClick={clearHistory} />
         </SettingGroup>
 
@@ -1056,6 +1053,7 @@ export function MoneyApp() {
       ledger: '本地账本',
       categories: '分类管理',
       trips: '行程管理',
+      archive: '归档数据',
       payment: '支付方式',
       invoice: '发票状态',
       export: '数据导出',
@@ -1175,6 +1173,73 @@ export function MoneyApp() {
               ))}
             </div>
           </div>
+        ) : null}
+
+        {settingsPanel === 'archive' ? (
+          archivedItemCount ? (
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <h4 className="px-1 text-xs font-semibold text-slate-500 dark:text-slate-400">归档分类</h4>
+                {archivedCategories.length ? (
+                  <div className="grid gap-2">
+                    {archivedCategories.map((category) => {
+                      const Icon = getCategoryIcon(category.icon)
+                      const usageCount = getCategoryUsageCount(category.id)
+                      return (
+                        <div key={category.id} className="flex items-center gap-3 rounded-lg border border-slate-200/80 bg-white/70 px-3 py-2.5 dark:border-white/10 dark:bg-black/15">
+                          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-white" style={{ backgroundColor: category.color }}>
+                            <Icon className="h-4 w-4" />
+                          </span>
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-sm font-medium">{category.name}</p>
+                            <p className="truncate text-xs text-slate-500 dark:text-slate-400">{usageCount ? `已使用 ${usageCount} 笔` : '未被使用'}</p>
+                          </div>
+                          {usageCount === 0 ? (
+                            <Button type="button" variant="ghost" className="h-8 shrink-0 px-2 text-red-500 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-500/10" onClick={() => deleteArchivedCategory(category)} disabled={saving}>
+                              <Trash2 className="h-4 w-4" />
+                              删除
+                            </Button>
+                          ) : null}
+                        </div>
+                      )
+                    })}
+                  </div>
+                ) : (
+                  <p className="rounded-lg border border-dashed border-slate-200/80 px-3 py-3 text-sm text-slate-500 dark:border-white/10 dark:text-slate-400">暂无归档分类</p>
+                )}
+              </div>
+
+              <div className="space-y-2">
+                <h4 className="px-1 text-xs font-semibold text-slate-500 dark:text-slate-400">归档行程</h4>
+                {archivedTrips.length ? (
+                  <div className="grid gap-2">
+                    {archivedTrips.map((trip) => {
+                      const usageCount = getTripUsageCount(trip.id)
+                      return (
+                        <div key={trip.id} className="flex items-center gap-3 rounded-lg border border-slate-200/80 bg-white/70 px-3 py-2.5 dark:border-white/10 dark:bg-black/15">
+                          <MapPin className="h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-300" />
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-sm font-medium">{trip.name}</p>
+                            <p className="truncate text-xs text-slate-500 dark:text-slate-400">{usageCount ? `已使用 ${usageCount} 笔` : trip.destination || '未被使用'}</p>
+                          </div>
+                          {usageCount === 0 ? (
+                            <Button type="button" variant="ghost" className="h-8 shrink-0 px-2 text-red-500 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-500/10" onClick={() => deleteArchivedTrip(trip)} disabled={saving}>
+                              <Trash2 className="h-4 w-4" />
+                              删除
+                            </Button>
+                          ) : null}
+                        </div>
+                      )
+                    })}
+                  </div>
+                ) : (
+                  <p className="rounded-lg border border-dashed border-slate-200/80 px-3 py-3 text-sm text-slate-500 dark:border-white/10 dark:text-slate-400">暂无归档行程</p>
+                )}
+              </div>
+            </div>
+          ) : (
+            <EmptyState icon={Archive} title="暂无归档数据" detail="停用分类或归档行程后，会在这里处理。" />
+          )
         ) : null}
 
         {settingsPanel === 'payment' ? (
