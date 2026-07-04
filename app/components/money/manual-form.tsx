@@ -55,6 +55,10 @@ export function ManualForm({
     event.target.value = ''
   }
 
+  function formatTripOption(trip: Trip) {
+    return trip.destination ? `${trip.name}（${trip.destination}）` : trip.name
+  }
+
   return (
     <Card
       id={formId}
@@ -115,10 +119,10 @@ export function ManualForm({
 
         <FieldRow label="行程" icon={<MapPin className="h-4 w-4" />}>
           <select value={form.trip_id} onChange={(event) => onPatchForm({ trip_id: event.target.value })} className="field-input h-10 border-slate-200 bg-slate-50 dark:border-white/10 dark:bg-black/20">
-            <option value="">默认出差</option>
+            <option value="">不归属行程</option>
             {trips.map((trip) => (
               <option key={trip.id} value={trip.id}>
-                {trip.name}
+                {formatTripOption(trip)}
               </option>
             ))}
           </select>
