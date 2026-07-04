@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { Edit3, Mic, Receipt, RefreshCcw, Sparkles } from 'lucide-react'
+import { Clock3, Edit3, Receipt, RefreshCcw, Sparkles } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
@@ -15,12 +15,10 @@ type RecordPageProps = {
   todayExpenses: Expense[]
   manualForm: ReactNode
   loading: boolean
-  listening: boolean
   analyzing: boolean
   onReload: () => void
   onManualRecord: () => void
   onOpenTextSmartDialog: () => void
-  onStartSpeech: () => void
   onGoHistory: () => void
   onEditExpense: (expense: Expense) => void
   onDeleteExpense: (expense: Expense) => void
@@ -32,12 +30,10 @@ export function RecordPage({
   todayExpenses,
   manualForm,
   loading,
-  listening,
   analyzing,
   onReload,
   onManualRecord,
   onOpenTextSmartDialog,
-  onStartSpeech,
   onGoHistory,
   onEditExpense,
   onDeleteExpense,
@@ -87,9 +83,6 @@ export function RecordPage({
       <TodayList
         totals={totals}
         todayExpenses={todayExpenses}
-        listening={listening}
-        analyzing={analyzing}
-        onStartSpeech={onStartSpeech}
         onGoHistory={onGoHistory}
         onEditExpense={onEditExpense}
         onDeleteExpense={onDeleteExpense}
@@ -123,9 +116,6 @@ function Metric({ label, value, tone }: { label: string; value: string; tone: st
 function TodayList({
   totals,
   todayExpenses,
-  listening,
-  analyzing,
-  onStartSpeech,
   onGoHistory,
   onEditExpense,
   onDeleteExpense,
@@ -133,9 +123,6 @@ function TodayList({
 }: {
   totals: Totals
   todayExpenses: Expense[]
-  listening: boolean
-  analyzing: boolean
-  onStartSpeech: () => void
   onGoHistory: () => void
   onEditExpense: (expense: Expense) => void
   onDeleteExpense: (expense: Expense) => void
@@ -162,9 +149,9 @@ function TodayList({
           <EmptyState icon={Receipt} title="今天还没有记录" detail="添加一笔餐饮、交通或住宿支出，后面报销更省心。" />
         )}
       </div>
-      <Button type="button" variant="ghost" className="mt-2 h-9 w-full rounded-md text-sm text-slate-500 dark:text-slate-400" onClick={onStartSpeech} disabled={analyzing}>
-        <Mic className={cn('h-4 w-4', listening && 'text-emerald-600 dark:text-emerald-300')} />
-        语音记账
+      <Button type="button" variant="ghost" className="mt-2 h-9 w-full rounded-md text-sm text-slate-500 dark:text-slate-400" onClick={onGoHistory}>
+        <Clock3 className="h-4 w-4" />
+        更多历史查看
       </Button>
     </Card>
   )

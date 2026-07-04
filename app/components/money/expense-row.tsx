@@ -10,12 +10,13 @@ import { formatMoneyCompact, getCategoryIcon, invoiceLabels, reimbursementLabels
 type ExpenseRowProps = {
   expense: Expense
   compact?: boolean
+  showActions?: boolean
   onEdit: (expense: Expense) => void
   onDelete: (expense: Expense) => void
   onQuickStatus: (expense: Expense, status: string) => void
 }
 
-export function ExpenseRow({ expense, compact = false, onEdit, onDelete, onQuickStatus }: ExpenseRowProps) {
+export function ExpenseRow({ expense, compact = false, showActions = false, onEdit, onDelete, onQuickStatus }: ExpenseRowProps) {
   const Icon = getCategoryIcon(expense.category_icon)
   const isPending = expense.reimbursement_status === 'pending'
   const reimbursementLabel = reimbursementLabels[expense.reimbursement_status] || expense.reimbursement_status
@@ -79,7 +80,7 @@ export function ExpenseRow({ expense, compact = false, onEdit, onDelete, onQuick
               </div>
             </div>
           </div>
-          {!compact ? (
+          {(!compact || showActions) ? (
             <div className="mt-3 flex flex-wrap items-center gap-2">
               <Badge variant="secondary" className="border-0 bg-slate-100 font-normal text-slate-600 dark:bg-white/10 dark:text-slate-300">
                 {expense.payment_method}

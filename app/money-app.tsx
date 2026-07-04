@@ -316,7 +316,7 @@ export function MoneyApp() {
   }
 
   async function deleteExpense(expense: Expense) {
-    if (!window.confirm(`删除「${expense.title}」这笔账单？`)) return
+    if (!window.confirm(`危险操作：将永久删除「${expense.title}」这笔账单，删除后无法恢复。\n\n金额：${formatMoney(expense.amount)}\n日期：${expense.expense_date}\n\n确定继续删除？`)) return
     setError('')
     try {
       await fetchJson(`/api/expenses/${expense.id}`, { method: 'DELETE' })
@@ -849,12 +849,10 @@ export function MoneyApp() {
               todayExpenses={todayExpenses}
               manualForm={manualForm}
               loading={loading}
-              listening={listening}
               analyzing={analyzing}
               onReload={loadData}
               onManualRecord={focusManualForm}
               onOpenTextSmartDialog={openTextSmartDialog}
-              onStartSpeech={startSpeech}
               onGoHistory={() => setActiveTab('history')}
               onEditExpense={editExpense}
               onDeleteExpense={deleteExpense}
@@ -938,7 +936,7 @@ export function MoneyApp() {
                 </div>
                 <div className="divide-y divide-slate-200/80 dark:divide-white/10">
                   {list.map((expense) => (
-                    <ExpenseItemRow key={expense.id} expense={expense} compact onEdit={editExpense} onDelete={deleteExpense} onQuickStatus={quickStatus} />
+                    <ExpenseItemRow key={expense.id} expense={expense} compact showActions onEdit={editExpense} onDelete={deleteExpense} onQuickStatus={quickStatus} />
                   ))}
                 </div>
               </Card>
