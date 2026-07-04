@@ -37,9 +37,18 @@ async function ensureInitialized() {
     const p = getPool()
 
     await p.query(
+      'CREATE TABLE IF NOT EXISTS my_money_users (\n' +
+        '  id BIGSERIAL PRIMARY KEY,\n' +
+        '  username VARCHAR(64) UNIQUE NOT NULL,\n' +
+        '  password_hash VARCHAR(255) NOT NULL,\n' +
+        '  created_at TIMESTAMPTZ NOT NULL DEFAULT now()\n' +
+        ')'
+    )
+
+    await p.query(
       'CREATE TABLE IF NOT EXISTS my_money_categories (\n' +
         '  id BIGSERIAL PRIMARY KEY,\n' +
-        '  name VARCHAR(80) UNIQUE NOT NULL,\n' +
+        '  name VARCHAR(80) NOT NULL,\n' +
         '  icon VARCHAR(64) NOT NULL DEFAULT \'more\',\n' +
         '  color VARCHAR(32) NOT NULL DEFAULT \'#94a3b8\',\n' +
         '  sort_order INT NOT NULL DEFAULT 0,\n' +
@@ -84,30 +93,64 @@ async function ensureInitialized() {
         ')'
     )
 
+    // Add user_id column if it doesn't exist (for migration)
+    await p.query('ALTER TABLE my_money_categories ADD COLUMN IF NOT EXISTS user_id BIGINT REFERENCES my_money_users(id) ON DELETE CASCADE')
+    await p.query('ALTER TABLE my_money_trips ADD COLUMN IF NOT EXISTS user_id BIGINT REFERENCES my_money_users(id) ON DELETE CASCADE')
+    await p.query('ALTER TABLE my_money_expenses ADD COLUMN IF NOT EXISTS user_id BIGINT REFERENCES my_money_users(id) ON DELETE CASCADE')
+
+    // Drop old unique constraint on category name, and create a new compound one with user_id
+    await p.query('ALTER TABLE my_money_categories DROP CONSTRAINT IF EXISTS my_money_categories_name_key')
+    await p.query('ALTER TABLE my_money_categories DROP CONSTRAINT IF EXISTS unique_category_name_per_user')
+    await p.query('ALTER TABLE my_money_categories ADD CONSTRAINT unique_category_name_per_user UNIQUE (user_id, name)')
+
     await p.query('CREATE INDEX IF NOT EXISTS idx_my_money_expenses_date ON my_money_expenses(expense_date DESC)')
     await p.query('CREATE INDEX IF NOT EXISTS idx_my_money_expenses_trip ON my_money_expenses(trip_id)')
     await p.query('CREATE INDEX IF NOT EXISTS idx_my_money_expenses_category ON my_money_expenses(category_id)')
     await p.query('CREATE INDEX IF NOT EXISTS idx_my_money_expenses_status ON my_money_expenses(reimbursement_status)')
+    await p.query('CREATE INDEX IF NOT EXISTS idx_my_money_categories_user ON my_money_categories(user_id)')
+    await p.query('CREATE INDEX IF NOT EXISTS idx_my_money_trips_user ON my_money_trips(user_id)')
+    await p.query('CREATE INDEX IF NOT EXISTS idx_my_money_expenses_user ON my_money_expenses(user_id)')
+
+    // Ensure there is a default admin user if none exists
+    const adminCheck = await p.query("SELECT id FROM my_money_users WHERE username = 'admin'")
+    let defaultUserId: string | null = null
+    const correctHash = '$2b$10$9XMxZhwvnYRwd/l.4LvTlOkobswuZqDhucTeVg5mRUsh2cToSL98u' // admin123
+    if (adminCheck.rows.length === 0) {
+      const defaultUser = await p.query(
+        "INSERT INTO my_money_users (username, password_hash) VALUES ($1, $2) RETURNING id",
+        ['admin', correctHash]
+      )
+      defaultUserId = defaultUser.rows[0].id
+    } else {
+      defaultUserId = adminCheck.rows[0].id
+    }
+
+    // Assign existing data to the default user
+    if (defaultUserId) {
+      await p.query('UPDATE my_money_categories SET user_id = $1 WHERE user_id IS NULL', [defaultUserId])
+      await p.query('UPDATE my_money_trips SET user_id = $1 WHERE user_id IS NULL', [defaultUserId])
+      await p.query('UPDATE my_money_expenses SET user_id = $1 WHERE user_id IS NULL', [defaultUserId])
+    }
 
     const categoryCount = await p.query('SELECT COUNT(*)::int AS count FROM my_money_categories')
-    if (categoryCount.rows[0]?.count === 0) {
+    if (categoryCount.rows[0]?.count === 0 && defaultUserId) {
       for (const category of defaultCategories) {
         await p.query(
-          'INSERT INTO my_money_categories (name, icon, color, sort_order) VALUES ($1, $2, $3, $4) ON CONFLICT (name) DO NOTHING',
-          [category.name, category.icon, category.color, category.sort_order]
+          'INSERT INTO my_money_categories (user_id, name, icon, color, sort_order) VALUES ($1, $2, $3, $4, $5) ON CONFLICT (user_id, name) DO NOTHING',
+          [defaultUserId, category.name, category.icon, category.color, category.sort_order]
         )
       }
     }
 
     const tripCount = await p.query('SELECT COUNT(*)::int AS count FROM my_money_trips')
-    if (tripCount.rows[0]?.count === 0) {
+    if (tripCount.rows[0]?.count === 0 && defaultUserId) {
       await p.query(
-        'INSERT INTO my_money_trips (name, destination, start_date, end_date, budget, status) VALUES ($1, $2, CURRENT_DATE, CURRENT_DATE, $3, $4)',
-        ['默认出差', '待填写', 0, 'open']
+        'INSERT INTO my_money_trips (user_id, name, destination, start_date, end_date, budget, status) VALUES ($1, $2, $3, CURRENT_DATE, CURRENT_DATE, $4, $5)',
+        [defaultUserId, '默认出差', '待填写', 0, 'open']
       )
     }
 
-    const tables = ['my_money_categories', 'my_money_trips', 'my_money_expenses']
+    const tables = ['my_money_users', 'my_money_categories', 'my_money_trips', 'my_money_expenses']
     for (const table of tables) {
       await p.query(
         `SELECT setval(
@@ -154,4 +197,20 @@ export async function transaction<T>(fn: (conn: PoolClient) => Promise<T>) {
   } finally {
     conn.release()
   }
+}
+
+export async function initializeUserDefaultData(userId: string | number) {
+  const p = getPool()
+  // 1. Insert default categories
+  for (const category of defaultCategories) {
+    await p.query(
+      'INSERT INTO my_money_categories (user_id, name, icon, color, sort_order) VALUES ($1, $2, $3, $4, $5) ON CONFLICT (user_id, name) DO NOTHING',
+      [userId, category.name, category.icon, category.color, category.sort_order]
+    )
+  }
+  // 2. Insert default trip
+  await p.query(
+    'INSERT INTO my_money_trips (user_id, name, destination, start_date, end_date, budget, status) VALUES ($1, $2, $3, CURRENT_DATE, CURRENT_DATE, $4, $5)',
+    [userId, '默认出差', '待填写', 0, 'open']
+  )
 }

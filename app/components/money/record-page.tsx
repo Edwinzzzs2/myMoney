@@ -16,6 +16,7 @@ type RecordPageProps = {
   manualForm: ReactNode
   loading: boolean
   analyzing: boolean
+  username?: string
   onReload: () => void
   onManualRecord: () => void
   onOpenTextSmartDialog: () => void
@@ -31,6 +32,7 @@ export function RecordPage({
   manualForm,
   loading,
   analyzing,
+  username,
   onReload,
   onManualRecord,
   onOpenTextSmartDialog,
@@ -44,7 +46,9 @@ export function RecordPage({
       <div className="flex items-start justify-between gap-3 pt-1">
         <div>
           <p className="text-[0.68rem] font-bold uppercase tracking-[0.22em] text-emerald-600 dark:text-emerald-300">Travel Ledger</p>
-          <h2 className="mt-1 text-[1.55rem] font-semibold leading-8 tracking-normal text-slate-950 dark:text-white">记账</h2>
+          <h2 className="mt-1 text-[1.55rem] font-semibold leading-8 tracking-normal text-slate-950 dark:text-white">
+            记账 {username ? <span className="ml-2 text-base font-normal text-slate-500">欢迎，{username}</span> : null}
+          </h2>
         </div>
         <Button
           type="button"

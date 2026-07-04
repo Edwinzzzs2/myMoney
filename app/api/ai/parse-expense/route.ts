@@ -93,7 +93,12 @@ function normalizeParsedExpense(raw: ParsedExpense, request: Required<Pick<Parse
   }
 }
 
+import { getAuthenticatedUser } from '@/lib/auth'
+
 export async function POST(req: NextRequest) {
+  const user = await getAuthenticatedUser()
+  if (!user) return NextResponse.json({ message: 'Unauthorized' }, { status: 401 })
+
   const apiKey = process.env.AI_API_KEY?.trim()
   const baseUrl = process.env.AI_BASE_URL?.trim()
   const model = process.env.AI_MODEL?.trim() || 'gpt-4o-mini'

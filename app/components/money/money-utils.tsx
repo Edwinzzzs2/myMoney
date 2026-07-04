@@ -110,7 +110,7 @@ export async function fetchJson<T>(input: RequestInfo | URL, init?: RequestInit)
     let message = `请求失败：${res.status}`
     try {
       const body = await res.json()
-      message = body?.message || message
+      message = body?.message || body?.error || message
     } catch {}
     throw new Error(message)
   }

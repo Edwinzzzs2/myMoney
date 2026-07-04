@@ -13,6 +13,7 @@ import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
+import { LoginScreen } from '@/app/components/money/login-screen'
 import type {
   AiParsedExpense,
   BootstrapData,
@@ -50,6 +51,8 @@ import {
   ChevronRight,
   CreditCard,
   Download,
+  Eye,
+  EyeOff,
   FileCheck2,
   Loader2,
   MapPin,
@@ -63,13 +66,15 @@ import {
   Sparkles,
   Sun,
   Trash2,
+  User,
+  Users,
   Wallet,
   X,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 type HistoryFilter = 'all' | 'invoice' | 'reimbursement' | 'reimbursed'
-type SettingsPanel = 'ledger' | 'categories' | 'trips' | 'archive' | 'payment' | 'invoice' | 'export' | null
+type SettingsPanel = 'profile' | 'categories' | 'trips' | 'archive' | 'payment' | 'invoice' | 'export' | 'users' | null
 type ZipFile = { name: string; data: Uint8Array }
 type CategoryIconValue = keyof typeof iconMap
 const preferredTripStorageKey = 'myMoney.preferredTripId'
@@ -98,6 +103,25 @@ export function MoneyApp() {
   const [historyFilter, setHistoryFilter] = useState<HistoryFilter>('all')
   const [settingsPanel, setSettingsPanel] = useState<SettingsPanel>(null)
   const [exportTripId, setExportTripId] = useState('')
+  const [user, setUser] = useState<{ id: string; username: string } | null>(null)
+  const [authLoading, setAuthLoading] = useState(true)
+  const [oldPassword, setOldPassword] = useState('')
+  const [newPassword, setNewPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
+  const [pwdLoading, setPwdLoading] = useState(false)
+  const [pwdError, setPwdError] = useState('')
+  const [pwdSuccess, setPwdSuccess] = useState('')
+  const [adminUsers, setAdminUsers] = useState<any[]>([])
+  const [adminUsersLoading, setAdminUsersLoading] = useState(false)
+  const [adminResetUserId, setAdminResetUserId] = useState<string | null>(null)
+  const [adminNewPassword, setAdminNewPassword] = useState('')
+  const [adminResetError, setAdminResetError] = useState('')
+  const [adminResetSuccess, setAdminResetSuccess] = useState('')
+  const [adminResetLoading, setAdminResetLoading] = useState(false)
+  const [showOldPassword, setShowOldPassword] = useState(false)
+  const [showNewPassword, setShowNewPassword] = useState(false)
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false)
+  const [showAdminResetPassword, setShowAdminResetPassword] = useState(false)
   const [categoryForm, setCategoryForm] = useState<CategoryFormState>({ name: '', icon: 'more', color: '#94a3b8' })
   const [tripForm, setTripForm] = useState<TripFormState>({ name: '', destination: '', start_date: '', end_date: '', budget: '' })
   const [loading, setLoading] = useState(true)
@@ -238,7 +262,24 @@ export function MoneyApp() {
     setLoading(true)
     setError('')
     try {
-      const data = await fetchJson<BootstrapData>('/api/bootstrap')
+      const authRes = await fetch('/api/auth/me')
+      if (authRes.status === 401) {
+        setUser(null)
+        setAuthLoading(false)
+        setLoading(false)
+        return
+      }
+      
+      const data = await fetchJson<BootstrapData & { authenticated: boolean, user: any }>('/api/bootstrap')
+      if (!data.authenticated) {
+        setUser(null)
+        setAuthLoading(false)
+        setLoading(false)
+        return
+      }
+
+      setUser(data.user)
+      setAuthLoading(false)
       const preferredTripId = getPreferredTripId(data.trips)
       setCategories(data.categories)
       setTrips(data.trips)
@@ -250,9 +291,118 @@ export function MoneyApp() {
         trip_id: data.trips.some((trip) => trip.id === current.trip_id) ? current.trip_id : preferredTripId,
       }))
     } catch (e: any) {
-      setError(e.message || '加载失败')
+      if (e.message?.includes('401')) {
+        setUser(null)
+      } else {
+        setError(e.message || '加载失败')
+      }
+      setAuthLoading(false)
     } finally {
       setLoading(false)
+    }
+  }
+
+  async function handleLogout() {
+    try {
+      await fetch('/api/auth/logout', { method: 'POST' })
+      setUser(null)
+      setActiveTab('record')
+      setSettingsPanel(null)
+    } catch (e) {
+      console.error(e)
+    }
+  }
+
+  async function handlePasswordChange(e: React.FormEvent) {
+    e.preventDefault()
+    if (!oldPassword || !newPassword) return
+    if (newPassword.length < 6) {
+      setPwdError('新密码长度不能少于 6 位')
+      return
+    }
+    if (newPassword !== confirmPassword) {
+      setPwdError('两次输入的新密码不一致')
+      return
+    }
+    setPwdLoading(true)
+    setPwdError('')
+    setPwdSuccess('')
+    try {
+      const res = await fetch('/api/auth/change-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ oldPassword, newPassword }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        throw new Error(data.error || '修改密码失败')
+      }
+      setPwdSuccess('密码修改成功！')
+      setOldPassword('')
+      setNewPassword('')
+      setConfirmPassword('')
+    } catch (err: any) {
+      setPwdError(err.message || '系统错误，请重试')
+    } finally {
+      setPwdLoading(false)
+    }
+  }
+
+  async function fetchAdminUsers() {
+    setAdminUsersLoading(true)
+    try {
+      const res = await fetch('/api/admin/users')
+      if (!res.ok) throw new Error('获取用户列表失败')
+      const data = await res.json()
+      setAdminUsers(data)
+    } catch (err: any) {
+      console.error(err)
+    } finally {
+      setAdminUsersLoading(false)
+    }
+  }
+
+  async function handleAdminResetPassword() {
+    if (!adminResetUserId || adminNewPassword.length < 6) return
+    setAdminResetLoading(true)
+    setAdminResetError('')
+    setAdminResetSuccess('')
+    try {
+      const res = await fetch('/api/admin/users/reset-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ targetUserId: adminResetUserId, newPassword: adminNewPassword }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        throw new Error(data.error || '重置密码失败')
+      }
+      setAdminResetSuccess('重置密码成功！')
+      setAdminNewPassword('')
+      fetchAdminUsers()
+      setTimeout(() => setAdminResetUserId(null), 1500)
+    } catch (err: any) {
+      setAdminResetError(err.message || '重置失败')
+    } finally {
+      setAdminResetLoading(false)
+    }
+  }
+
+  async function handleAdminDeleteUser(targetUserId: string) {
+    if (!window.confirm('确定要删除该用户吗？该操作将同时清空该用户的所有账单、分类和行程数据，且不可恢复！')) {
+      return
+    }
+    try {
+      const res = await fetch('/api/admin/users', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ targetUserId }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || '删除用户失败')
+      fetchAdminUsers()
+    } catch (err: any) {
+      alert(err.message || '删除失败')
     }
   }
 
@@ -854,6 +1004,21 @@ export function MoneyApp() {
     />
   )
 
+  if (authLoading) {
+    return (
+      <div className="flex min-h-dvh items-center justify-center bg-[#f5f6f5] dark:bg-[#070a12]">
+        <Loader2 className="h-8 w-8 animate-spin text-emerald-600" />
+      </div>
+    )
+  }
+
+  if (!user) {
+    return <LoginScreen onLogin={() => {
+      setActiveTab('record')
+      loadData()
+    }} />
+  }
+
   return (
     <main className="fixed inset-0 overflow-hidden bg-[#f6f7f4] text-[#161a17] dark:bg-[#070a12] dark:text-white">
       <div className="pointer-events-none fixed inset-0 bg-[linear-gradient(180deg,#fffdf8_0%,#f3f6f1_48%,#eef3f8_100%)] dark:bg-[radial-gradient(circle_at_20%_0%,rgba(45,212,191,0.18),transparent_30%),radial-gradient(circle_at_78%_12%,rgba(91,140,255,0.18),transparent_28%),linear-gradient(145deg,#070a12_0%,#0b1020_55%,#070a12_100%)]" />
@@ -876,6 +1041,7 @@ export function MoneyApp() {
               manualForm={manualForm}
               loading={loading}
               analyzing={analyzing}
+              username={user?.username}
               onReload={loadData}
               onManualRecord={focusManualForm}
               onOpenTextSmartDialog={openTextSmartDialog}
@@ -984,13 +1150,23 @@ export function MoneyApp() {
         <Card className="rounded-lg border-slate-200/80 bg-white/80 p-4 shadow-[0_10px_24px_rgba(15,23,42,0.06)] backdrop-blur dark:border-white/10 dark:bg-white/[0.045] dark:shadow-none">
           <div className="flex items-center gap-3">
             <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-emerald-100 text-emerald-700 dark:bg-emerald-400/15 dark:text-emerald-300">
-              <BookOpen className="h-7 w-7" />
+              <User className="h-7 w-7" />
             </span>
             <div className="min-w-0 flex-1">
-              <p className="font-semibold text-slate-950 dark:text-white">本地账本</p>
-              <p className="mt-0.5 text-sm text-slate-500 dark:text-slate-400">{expenses.length} 笔记录</p>
+              <p className="font-semibold text-slate-950 dark:text-white">用户信息</p>
+              <p className="mt-0.5 text-sm text-slate-500 dark:text-slate-400">用户名: {user?.username}</p>
             </div>
-            <Button type="button" variant="ghost" size="icon" className="h-8 w-8 text-slate-400" onClick={() => setSettingsPanel('ledger')} aria-label="查看账本">
+            <Button type="button" variant="ghost" size="icon" className="h-8 w-8 text-slate-400" onClick={() => {
+              setSettingsPanel('profile')
+              setOldPassword('')
+              setNewPassword('')
+              setConfirmPassword('')
+              setPwdError('')
+              setPwdSuccess('')
+              setShowOldPassword(false)
+              setShowNewPassword(false)
+              setShowConfirmPassword(false)
+            }} aria-label="查看用户信息">
               <ChevronRight className="h-5 w-5" />
             </Button>
           </div>
@@ -1009,6 +1185,15 @@ export function MoneyApp() {
           <SettingRow icon={Trash2} label="清空历史数据" danger detail="保留分类与行程" onClick={clearHistory} />
         </SettingGroup>
 
+        {user?.username === 'admin' ? (
+          <SettingGroup title="系统管理">
+            <SettingRow icon={Users} label="账户管理" detail={`${adminUsers.length || '查看'} 个注册用户`} active={settingsPanel === 'users'} onClick={() => {
+              setSettingsPanel('users')
+              fetchAdminUsers()
+            }} />
+          </SettingGroup>
+        ) : null}
+
         <SettingGroup title="外观">
           <div className="flex h-14 items-center justify-between px-4">
             <span className="flex items-center gap-3 text-sm font-medium text-slate-900 dark:text-slate-100">
@@ -1019,7 +1204,15 @@ export function MoneyApp() {
           </div>
         </SettingGroup>
 
-        <p className="pt-1 text-center text-xs text-slate-400">Travel Ledger · v1.0</p>
+        <Button
+          type="button"
+          variant="outline"
+          onClick={handleLogout}
+          className="mt-4 h-11 w-full border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700 dark:border-red-500/20 dark:text-red-400 dark:hover:bg-red-500/10"
+        >
+          退出登录
+        </Button>
+        <p className="pt-2 text-center text-xs text-slate-400">Travel Ledger · v1.0</p>
       </div>
     )
   }
@@ -1074,13 +1267,14 @@ export function MoneyApp() {
     if (!settingsPanel) return null
 
     const titleMap: Record<Exclude<SettingsPanel, null>, string> = {
-      ledger: '本地账本',
+      profile: '用户信息',
       categories: '分类管理',
       trips: '行程管理',
       archive: '归档数据',
       payment: '支付方式',
       invoice: '发票状态',
       export: '数据导出',
+      users: '账户管理',
     }
     const exportRows = getExportExpenses(exportTripId)
     const exportReceiptCount = exportRows.filter((expense) => Boolean(expense.receipt_url)).length
@@ -1094,203 +1288,249 @@ export function MoneyApp() {
           </div>
           <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4 custom-scrollbar">
 
-        {settingsPanel === 'ledger' ? (
-          <div className="grid grid-cols-3 gap-2">
-            <MiniStat label="账单" value={`${expenses.length} 笔`} />
-            <MiniStat label="分类" value={`${activeCategories.length} 个`} />
-            <MiniStat label="行程" value={`${trips.length} 个`} />
-            <Button type="button" variant="outline" className="col-span-3 mt-1 h-10 bg-white/70 dark:border-white/10 dark:bg-white/[0.045]" onClick={loadData}>
-              <RefreshCcw className={cn('h-4 w-4', loading && 'animate-spin')} />
-              同步本地账本
-            </Button>
-          </div>
-        ) : null}
-
-        {settingsPanel === 'categories' ? (
-          <div className="space-y-3">
-            <MiniStat label="可用分类" value={`${activeCategories.length} 个`} />
-
-            <form onSubmit={saveCategory} className="space-y-2 rounded-lg border border-slate-200/80 bg-white/70 p-3 dark:border-white/10 dark:bg-black/15">
-              <Input value={categoryForm.name} onChange={(event) => setCategoryForm((current) => ({ ...current, name: event.target.value }))} placeholder="分类名称" className="h-10" />
-              <div className="grid grid-cols-2 gap-2">
-                {categoryIconOptions.map((option) => {
-                  const Icon = getCategoryIcon(option.value)
-                  const selected = categoryForm.icon === option.value
-                  return (
-                    <Button
-                      key={option.value}
-                      type="button"
-                      variant="outline"
-                      className={cn(
-                        'h-11 justify-start rounded-md border-slate-200 bg-white px-3 text-slate-700 hover:bg-slate-50 dark:border-white/10 dark:bg-black/20 dark:text-slate-100 dark:hover:bg-white/10',
-                        selected && 'border-transparent text-white shadow-sm hover:text-white dark:border-transparent dark:text-white'
-                      )}
-                      style={selected ? { backgroundColor: categoryForm.color } : undefined}
-                      aria-pressed={selected}
-                      onClick={() => setCategoryForm((current) => ({ ...current, icon: option.value }))}
-                    >
-                      <Icon className="h-4 w-4 shrink-0" />
-                      <span className="min-w-0 truncate">{option.label}</span>
-                    </Button>
-                  )
-                })}
-              </div>
-              <div className="flex items-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2 dark:border-white/10 dark:bg-black/20">
-                <span className="min-w-0 flex-1 text-sm font-medium text-slate-600 dark:text-slate-300">分类颜色</span>
-                <Input type="color" value={categoryForm.color} onChange={(event) => setCategoryForm((current) => ({ ...current, color: event.target.value }))} className="h-9 w-14 p-1" aria-label="分类颜色" />
-              </div>
-              <Button type="submit" className="h-10 w-full bg-emerald-600 text-white hover:bg-emerald-700" disabled={saving || !categoryForm.name.trim()}>
-                <Plus className="h-4 w-4" />
-                新增分类
-              </Button>
-            </form>
-
-            <div className="grid gap-2">
-              {activeCategories.map((category) => {
-                const Icon = getCategoryIcon(category.icon)
-                return (
-                  <div key={category.id} className="flex items-center gap-3 rounded-lg border border-slate-200/80 bg-white/70 px-3 py-2.5 dark:border-white/10 dark:bg-black/15">
-                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-white" style={{ backgroundColor: category.color }}>
-                      <Icon className="h-4 w-4" />
-                    </span>
-                    <span className="min-w-0 flex-1 truncate text-sm font-medium">{category.name}</span>
-                    <Button type="button" variant="ghost" size="icon" className="h-8 w-8 text-slate-500" onClick={() => disableCategory(category)} aria-label={`停用${category.name}`}>
-                      <Archive className="h-4 w-4" />
-                    </Button>
+            {settingsPanel === 'profile' ? (
+              <div className="space-y-5">
+                <div className="rounded-lg border border-slate-200/80 bg-white/70 p-4 dark:border-white/10 dark:bg-black/15">
+                  <p className="text-xs text-slate-500 dark:text-slate-400">当前登录用户</p>
+                  <p className="mt-1 text-lg font-bold text-slate-900 dark:text-white">{user?.username}</p>
+                  
+                  <div className="mt-4 grid grid-cols-3 gap-2 border-t border-slate-100 pt-4 dark:border-white/5">
+                    <MiniStat label="账单" value={`${expenses.length} 笔`} />
+                    <MiniStat label="分类" value={`${activeCategories.length} 个`} />
+                    <MiniStat label="行程" value={`${trips.length} 个`} />
                   </div>
-                )
-              })}
-            </div>
-          </div>
-        ) : null}
-
-        {settingsPanel === 'trips' ? (
-          <div className="space-y-3">
-            <MiniStat label="行程" value={`${trips.length} 个`} />
-
-            <form onSubmit={saveTrip} className="space-y-2 rounded-lg border border-slate-200/80 bg-white/70 p-3 dark:border-white/10 dark:bg-black/15">
-              <Input value={tripForm.name} onChange={(event) => setTripForm((current) => ({ ...current, name: event.target.value }))} placeholder="行程名称" className="h-10" />
-              <Input value={tripForm.destination} onChange={(event) => setTripForm((current) => ({ ...current, destination: event.target.value }))} placeholder="目的地" className="h-10" />
-              <div className="grid grid-cols-2 gap-2">
-                <Input type="date" value={tripForm.start_date} onChange={(event) => setTripForm((current) => ({ ...current, start_date: event.target.value }))} className="h-10" />
-                <Input type="date" value={tripForm.end_date} onChange={(event) => setTripForm((current) => ({ ...current, end_date: event.target.value }))} className="h-10" />
-              </div>
-              <Input type="number" inputMode="decimal" min="0" step="0.01" value={tripForm.budget} onChange={(event) => setTripForm((current) => ({ ...current, budget: event.target.value }))} placeholder="预算（可选）" className="h-10" />
-              <Button type="submit" className="h-10 w-full bg-emerald-600 text-white hover:bg-emerald-700" disabled={saving || !tripForm.name.trim()}>
-                <Plus className="h-4 w-4" />
-                新增行程
-              </Button>
-            </form>
-
-            <div className="grid gap-2">
-              {trips.map((trip) => (
-                <div key={trip.id} className="flex items-center gap-3 rounded-lg border border-slate-200/80 bg-white/70 px-3 py-2.5 dark:border-white/10 dark:bg-black/15">
-                  <MapPin className="h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-300" />
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-medium">{trip.name}</p>
-                    <p className="truncate text-xs text-slate-500 dark:text-slate-400">{trip.destination || '未设置目的地'}</p>
-                  </div>
-                  <Button type="button" variant="ghost" size="icon" className="h-8 w-8 text-slate-500" onClick={() => archiveTrip(trip)} aria-label={`归档${trip.name}`}>
-                    <Archive className="h-4 w-4" />
-                  </Button>
                 </div>
-              ))}
-            </div>
-          </div>
-        ) : null}
 
-        {settingsPanel === 'archive' ? (
-          archivedItemCount ? (
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <h4 className="px-1 text-xs font-semibold text-slate-500 dark:text-slate-400">归档分类</h4>
-                {archivedCategories.length ? (
-                  <div className="grid gap-2">
-                    {archivedCategories.map((category) => {
-                      const Icon = getCategoryIcon(category.icon)
-                      const usageCount = getCategoryUsageCount(category.id)
-                      return (
-                        <div key={category.id} className="flex items-center gap-3 rounded-lg border border-slate-200/80 bg-white/70 px-3 py-2.5 dark:border-white/10 dark:bg-black/15">
-                          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-white" style={{ backgroundColor: category.color }}>
-                            <Icon className="h-4 w-4" />
-                          </span>
-                          <div className="min-w-0 flex-1">
-                            <p className="truncate text-sm font-medium">{category.name}</p>
-                            <p className="truncate text-xs text-slate-500 dark:text-slate-400">{usageCount ? `已使用 ${usageCount} 笔` : '未被使用'}</p>
+                <form onSubmit={handlePasswordChange} className="space-y-3.5 rounded-lg border border-slate-200/80 bg-white/70 p-4 dark:border-white/10 dark:bg-black/15">
+                  <h4 className="text-sm font-bold text-slate-900 dark:text-white">修改密码</h4>
+                  
+                  <div>
+                    <label className="mb-1 block text-xs text-slate-500 dark:text-slate-400">当前密码</label>
+                    <div className="relative">
+                      <Input
+                        type={showOldPassword ? 'text' : 'password'}
+                        value={oldPassword}
+                        onChange={(e) => setOldPassword(e.target.value)}
+                        placeholder="请输入当前密码"
+                        required
+                        className="h-9 pr-10"
+                      />
+                      <button
+                        type="button"
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                        onClick={() => setShowOldPassword(!showOldPassword)}
+                      >
+                        {showOldPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="mb-1 block text-xs text-slate-500 dark:text-slate-400">新密码</label>
+                    <div className="relative">
+                      <Input
+                        type={showNewPassword ? 'text' : 'password'}
+                        value={newPassword}
+                        onChange={(e) => setNewPassword(e.target.value)}
+                        placeholder="请输入新密码 (至少 6 位)"
+                        required
+                        className="h-9 pr-10"
+                      />
+                      <button
+                        type="button"
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                        onClick={() => setShowNewPassword(!showNewPassword)}
+                      >
+                        {showNewPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="mb-1 block text-xs text-slate-500 dark:text-slate-400">确认新密码</label>
+                    <div className="relative">
+                      <Input
+                        type={showConfirmPassword ? 'text' : 'password'}
+                        value={confirmPassword}
+                        onChange={(e) => setConfirmPassword(e.target.value)}
+                        placeholder="请再次输入新密码"
+                        required
+                        className="h-9 pr-10"
+                      />
+                      <button
+                        type="button"
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                        onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                      >
+                        {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </button>
+                    </div>
+                  </div>
+
+                  {pwdError && <p className="text-xs font-semibold text-red-500">{pwdError}</p>}
+                  {pwdSuccess && <p className="text-xs font-semibold text-emerald-600 dark:text-emerald-400">{pwdSuccess}</p>}
+
+                  <Button type="submit" disabled={pwdLoading || !oldPassword || !newPassword || !confirmPassword} className="h-9 w-full bg-emerald-600 hover:bg-emerald-700 dark:bg-emerald-500 dark:hover:bg-emerald-600">
+                    {pwdLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                    确认修改
+                  </Button>
+                </form>
+              </div>
+            ) : null}
+
+            {settingsPanel === 'users' ? (
+              <div className="space-y-4">
+                {adminUsersLoading ? (
+                  <div className="flex justify-center py-8">
+                    <Loader2 className="h-6 w-6 animate-spin text-emerald-600" />
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {adminUsers.map((u) => (
+                      <div key={u.id} className="rounded-lg border border-slate-200/80 bg-white/70 p-3.5 dark:border-white/10 dark:bg-black/15">
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <p className="font-bold text-slate-900 dark:text-white">
+                              {u.username} 
+                              {u.username === 'admin' ? <span className="ml-1.5 rounded bg-emerald-100 px-1.5 py-0.5 text-[0.65rem] font-medium text-emerald-800 dark:bg-emerald-500/20 dark:text-emerald-300">管理员</span> : null}
+                            </p>
+                            <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">注册时间: {new Date(u.created_at).toLocaleDateString()}</p>
                           </div>
-                          {usageCount === 0 ? (
-                            <Button type="button" variant="ghost" className="h-8 shrink-0 px-2 text-red-500 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-500/10" onClick={() => deleteArchivedCategory(category)} disabled={saving}>
-                              <Trash2 className="h-4 w-4" />
-                              删除
-                            </Button>
+                          
+                          {u.username !== 'admin' ? (
+                            <div className="flex gap-2">
+                              <Button type="button" variant="outline" size="sm" className="h-7 text-xs border-emerald-200 text-emerald-600 hover:bg-emerald-50 dark:border-emerald-500/20 dark:text-emerald-400 dark:hover:bg-emerald-500/10" onClick={() => {
+                                setAdminResetUserId(u.id)
+                                setAdminNewPassword('')
+                                setAdminResetError('')
+                                setAdminResetSuccess('')
+                                setShowAdminResetPassword(false)
+                              }}>
+                                重置
+                              </Button>
+                              <Button type="button" variant="ghost" size="sm" className="h-7 text-xs text-red-500 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-500/10" onClick={() => handleAdminDeleteUser(u.id)}>
+                                删除
+                              </Button>
+                            </div>
                           ) : null}
                         </div>
+
+                        <div className="mt-3.5 grid grid-cols-3 gap-2 border-t border-slate-100 pt-2.5 dark:border-white/5 text-center text-xs">
+                          <div>
+                            <p className="text-slate-400">账单数</p>
+                            <p className="mt-0.5 font-semibold text-slate-700 dark:text-slate-200">{u.expenses_count}</p>
+                          </div>
+                          <div>
+                            <p className="text-slate-400">分类数</p>
+                            <p className="mt-0.5 font-semibold text-slate-700 dark:text-slate-200">{u.categories_count}</p>
+                          </div>
+                          <div>
+                            <p className="text-slate-400">行程数</p>
+                            <p className="mt-0.5 font-semibold text-slate-700 dark:text-slate-200">{u.trips_count}</p>
+                          </div>
+                        </div>
+
+                        {adminResetUserId === u.id ? (
+                          <div className="mt-3.5 border-t border-slate-100 pt-3 dark:border-white/5 space-y-2">
+                            <p className="text-xs font-semibold text-slate-800 dark:text-slate-200">为 {u.username} 重置密码</p>
+                            <div className="flex gap-2">
+                              <div className="relative flex-1">
+                                <Input
+                                  type={showAdminResetPassword ? 'text' : 'password'}
+                                  value={adminNewPassword}
+                                  onChange={(e) => setAdminNewPassword(e.target.value)}
+                                  placeholder="输入新密码 (至少6位)"
+                                  className="h-8 text-xs bg-white dark:bg-black/30 pr-8"
+                                  minLength={6}
+                                />
+                                <button
+                                  type="button"
+                                  className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                                  onClick={() => setShowAdminResetPassword(!showAdminResetPassword)}
+                                >
+                                  {showAdminResetPassword ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                                </button>
+                              </div>
+                              <Button type="button" size="sm" className="h-8 shrink-0 text-xs bg-emerald-600 text-white hover:bg-emerald-700" onClick={handleAdminResetPassword} disabled={adminResetLoading || adminNewPassword.length < 6}>
+                                {adminResetLoading ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : null}
+                                确认
+                              </Button>
+                              <Button type="button" variant="ghost" size="sm" className="h-8 text-xs" onClick={() => setAdminResetUserId(null)}>
+                                取消
+                              </Button>
+                            </div>
+                            {adminResetError && <p className="text-xs text-red-500 font-semibold">{adminResetError}</p>}
+                            {adminResetSuccess && <p className="text-xs text-emerald-600 font-semibold dark:text-emerald-400">{adminResetSuccess}</p>}
+                          </div>
+                        ) : null}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ) : null}
+
+            {settingsPanel === 'categories' ? (
+              <div className="space-y-3">
+                <MiniStat label="可用分类" value={`${activeCategories.length} 个`} />
+
+                <form onSubmit={saveCategory} className="space-y-2 rounded-lg border border-slate-200/80 bg-white/70 p-3 dark:border-white/10 dark:bg-black/15">
+                  <Input value={categoryForm.name} onChange={(event) => setCategoryForm((current) => ({ ...current, name: event.target.value }))} placeholder="分类名称" className="h-10" />
+                  <div className="grid grid-cols-2 gap-2">
+                    {categoryIconOptions.map((option) => {
+                      const Icon = getCategoryIcon(option.value)
+                      const selected = categoryForm.icon === option.value
+                      return (
+                        <Button
+                          key={option.value}
+                          type="button"
+                          variant="outline"
+                          className={cn(
+                            'h-11 justify-start rounded-md border-slate-200 bg-white px-3 text-slate-700 hover:bg-slate-50 dark:border-white/10 dark:bg-black/20 dark:text-slate-100 dark:hover:bg-white/10',
+                            selected && 'border-transparent text-white shadow-sm hover:text-white dark:border-transparent dark:text-white'
+                          )}
+                          style={selected ? { backgroundColor: categoryForm.color } : undefined}
+                          aria-pressed={selected}
+                          onClick={() => setCategoryForm((current) => ({ ...current, icon: option.value }))}
+                        >
+                          <Icon className="h-4 w-4 shrink-0" />
+                          <span className="min-w-0 truncate">{option.label}</span>
+                        </Button>
                       )
                     })}
                   </div>
-                ) : (
-                  <p className="rounded-lg border border-dashed border-slate-200/80 px-3 py-3 text-sm text-slate-500 dark:border-white/10 dark:text-slate-400">暂无归档分类</p>
-                )}
-              </div>
-
-              <div className="space-y-2">
-                <h4 className="px-1 text-xs font-semibold text-slate-500 dark:text-slate-400">归档行程</h4>
-                {archivedTrips.length ? (
-                  <div className="grid gap-2">
-                    {archivedTrips.map((trip) => {
-                      const usageCount = getTripUsageCount(trip.id)
-                      return (
-                        <div key={trip.id} className="flex items-center gap-3 rounded-lg border border-slate-200/80 bg-white/70 px-3 py-2.5 dark:border-white/10 dark:bg-black/15">
-                          <MapPin className="h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-300" />
-                          <div className="min-w-0 flex-1">
-                            <p className="truncate text-sm font-medium">{trip.name}</p>
-                            <p className="truncate text-xs text-slate-500 dark:text-slate-400">{usageCount ? `已使用 ${usageCount} 笔` : trip.destination || '未被使用'}</p>
-                          </div>
-                          {usageCount === 0 ? (
-                            <Button type="button" variant="ghost" className="h-8 shrink-0 px-2 text-red-500 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-500/10" onClick={() => deleteArchivedTrip(trip)} disabled={saving}>
-                              <Trash2 className="h-4 w-4" />
-                              删除
-                            </Button>
-                          ) : null}
-                        </div>
-                      )
-                    })}
+                  <div className="flex items-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2 dark:border-white/10 dark:bg-black/20">
+                    <span className="min-w-0 flex-1 text-sm font-medium text-slate-600 dark:text-slate-300">分类颜色</span>
+                    <Input type="color" value={categoryForm.color} onChange={(event) => setCategoryForm((current) => ({ ...current, color: event.target.value }))} className="h-9 w-14 p-1" aria-label="分类颜色" />
                   </div>
-                ) : (
-                  <p className="rounded-lg border border-dashed border-slate-200/80 px-3 py-3 text-sm text-slate-500 dark:border-white/10 dark:text-slate-400">暂无归档行程</p>
-                )}
-              </div>
-            </div>
-          ) : (
-            <EmptyState icon={Archive} title="暂无归档数据" detail="停用分类或归档行程后，会在这里处理。" />
-          )
-        ) : null}
+                  <Button type="submit" className="h-10 w-full bg-emerald-600 text-white hover:bg-emerald-700" disabled={saving || !categoryForm.name.trim()}>
+                    <Plus className="h-4 w-4" />
+                    新增分类
+                  </Button>
+                </form>
 
-        {settingsPanel === 'payment' ? (
-          <div className="grid gap-2">
-            {paymentMethods.map((method) => (
-              <div key={method} className="flex items-center justify-between gap-3 rounded-lg border border-slate-200/80 bg-white/70 px-3 py-3 text-sm dark:border-white/10 dark:bg-black/15">
-                <span className="flex min-w-0 items-center gap-2 font-medium">
-                  <CreditCard className="h-4 w-4 text-slate-500" />
-                  <span className="truncate">{method}</span>
-                </span>
-                <span className="shrink-0 text-xs text-slate-500 dark:text-slate-400">{expenses.filter((expense) => expense.payment_method === method).length} 笔</span>
+                <div className="grid gap-2">
+                  {activeCategories.map((category) => {
+                    const Icon = getCategoryIcon(category.icon)
+                    return (
+                      <div key={category.id} className="flex items-center gap-3 rounded-lg border border-slate-200/80 bg-white/70 px-3 py-2.5 dark:border-white/10 dark:bg-black/15">
+                        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-white" style={{ backgroundColor: category.color }}>
+                          <Icon className="h-4 w-4" />
+                        </span>
+                        <span className="min-w-0 flex-1 truncate text-sm font-medium">{category.name}</span>
+                        <Button type="button" variant="ghost" size="icon" className="h-8 w-8 text-slate-500" onClick={() => disableCategory(category)} aria-label={`停用${category.name}`}>
+                          <Archive className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    )
+                  })}
+                </div>
               </div>
-            ))}
-          </div>
-        ) : null}
+            ) : null}
 
-        {settingsPanel === 'invoice' ? (
-          <div className="grid gap-2">
-            {invoiceOptions.map((status) => (
-              <div key={status} className="flex items-center justify-between gap-3 rounded-lg border border-slate-200/80 bg-white/70 px-3 py-3 text-sm dark:border-white/10 dark:bg-black/15">
-                <span className="flex min-w-0 items-center gap-2 font-medium">
-                  <Receipt className="h-4 w-4 text-slate-500" />
-                  <span className="truncate">{invoiceLabels[status]}</span>
-                </span>
-                <span className="shrink-0 text-xs text-slate-500 dark:text-slate-400">{expenses.filter((expense) => expense.invoice_status === status).length} 笔</span>
-              </div>
-            ))}
+            {settingsPanel === 'trips' ? (
+              <div className="space-y-3">
+                <MiniStat label="行程" value={`${trips.length} 个`} />
           </div>
         ) : null}
 
@@ -1335,6 +1575,8 @@ export function MoneyApp() {
       </div>
     )
   }
+
+
 
   function SmartDialog() {
     if (!smartOpen) return null
