@@ -105,44 +105,10 @@ body {
 }
 
 @layer components {
-  .ticket-card {
-    position: relative;
-    background-image:
-      linear-gradient(135deg, rgba(255, 255, 255, 0.72), rgba(255, 250, 243, 0.96)),
-      radial-gradient(circle at 18% 0%, rgba(251, 191, 36, 0.08), transparent 28%);
-  }
-
-  .ticket-card::before,
-  .ticket-card::after {
-    content: "";
-    position: absolute;
-    top: 1.05rem;
-    bottom: 1.05rem;
-    z-index: 2;
-    width: 0.75rem;
-    pointer-events: none;
-    background: radial-gradient(circle, #fbfbf8 0 4px, #ded4c7 4.5px 5px, transparent 5.5px) center top / 0.75rem 1.25rem repeat-y;
-  }
-
-  .ticket-card::before {
-    left: -0.375rem;
-  }
-
-  .ticket-card::after {
-    right: -0.375rem;
-  }
-
-  .dark .ticket-card {
-    background-image: none;
-  }
-
-  .dark .ticket-card::before,
-  .dark .ticket-card::after {
-    background: radial-gradient(circle, #070a12 0 4px, rgba(255, 255, 255, 0.12) 4.5px 5px, transparent 5.5px) center top / 0.75rem 1.25rem repeat-y;
-  }
+  /* ticket-card styles removed — SummaryCard now uses clean white design */
 
   .field-input {
-    @apply h-10 w-full rounded-md border border-[#dfddd7] bg-white px-3 text-base text-[#111815] outline-none transition placeholder:text-slate-400 focus:border-emerald-600/60 dark:border-white/10 dark:bg-black/20 dark:text-white dark:placeholder:text-slate-500 dark:focus:border-emerald-300/60 sm:text-sm;
+    @apply h-10 w-full rounded-md border border-slate-200 bg-white px-3 text-base text-[#111815] outline-none transition placeholder:text-slate-400 focus:border-emerald-600/60 dark:border-white/10 dark:bg-black/20 dark:text-white dark:placeholder:text-slate-500 dark:focus:border-emerald-300/60 sm:text-sm;
     color-scheme: light;
   }
 

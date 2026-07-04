@@ -838,8 +838,8 @@ export function MoneyApp() {
   }
 
   return (
-    <main className="fixed inset-0 overflow-hidden bg-[#fbfbf8] text-[#0d1411] dark:bg-[#070a12] dark:text-white">
-      <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(circle_at_12%_0%,rgba(16,185,129,0.075),transparent_32%),linear-gradient(180deg,#ffffff_0%,#fbfbf8_54%,#f6f7f3_100%)] dark:bg-[radial-gradient(circle_at_20%_0%,rgba(45,212,191,0.18),transparent_30%),radial-gradient(circle_at_78%_12%,rgba(91,140,255,0.18),transparent_28%),linear-gradient(145deg,#070a12_0%,#0b1020_55%,#070a12_100%)]" />
+    <main className="fixed inset-0 overflow-hidden bg-[#f5f6f5] text-[#1a1a1a] dark:bg-[#070a12] dark:text-white">
+      <div className="pointer-events-none fixed inset-0 bg-[linear-gradient(180deg,#ffffff_0%,#f5f6f5_100%)] dark:bg-[radial-gradient(circle_at_20%_0%,rgba(45,212,191,0.18),transparent_30%),radial-gradient(circle_at_78%_12%,rgba(91,140,255,0.18),transparent_28%),linear-gradient(145deg,#070a12_0%,#0b1020_55%,#070a12_100%)]" />
       <div className="relative mx-auto grid h-full min-h-0 max-w-[1440px] grid-cols-1 lg:grid-cols-[270px_minmax(0,1fr)_390px]">
         <DesktopNav activeTab={activeTab} setActiveTab={setActiveTab} totals={totals} />
 
@@ -866,7 +866,7 @@ export function MoneyApp() {
           {activeTab === 'settings' ? SettingsView() : null}
         </section>
 
-        <aside className="hidden h-full overflow-y-auto border-l border-[#e8e3dc] bg-white/70 px-5 py-7 custom-scrollbar dark:border-white/10 dark:bg-white/[0.035] lg:block">
+        <aside className="hidden h-full overflow-y-auto border-l border-slate-200/80 bg-white/90 px-5 py-7 custom-scrollbar dark:border-white/10 dark:bg-white/[0.035] lg:block">
           {ManualForm({ compact: true })}
         </aside>
       </div>
@@ -878,7 +878,8 @@ export function MoneyApp() {
 
   function RecordView() {
     return (
-      <div className="mx-auto mt-3 max-w-3xl space-y-3.5 sm:mt-5 sm:space-y-4">
+      <div className="mx-auto mt-2 max-w-3xl space-y-3 sm:mt-4 sm:space-y-3.5">
+        <h2 className="text-[1.55rem] font-black tracking-tight text-black dark:text-white lg:text-[1.75rem]">今天记一笔</h2>
         {SummaryCard()}
         <div className="block lg:hidden">
           {ManualForm({})}
@@ -891,25 +892,25 @@ export function MoneyApp() {
 
   function SummaryCard() {
     return (
-      <section className="ticket-card overflow-hidden rounded-lg border border-[#ded4c7] bg-[#fffaf3] shadow-[0_10px_26px_rgba(64,48,28,0.075)] dark:border-white/10 dark:bg-white/[0.055] dark:shadow-none">
+      <section className="overflow-hidden rounded-xl border border-slate-200/80 bg-white shadow-[0_2px_12px_rgba(0,0,0,0.06)] dark:border-white/10 dark:bg-white/[0.055] dark:shadow-none">
         <div className="grid grid-cols-[1.55fr_0.9fr_0.9fr]">
           <div className="px-4 py-3.5 lg:px-7 lg:py-5">
             <p className="text-[0.88rem] font-semibold text-[#1e2521] dark:text-slate-200 lg:text-lg">本月可报销</p>
-            <div className="mt-2 text-[1.8rem] font-black tracking-normal text-black dark:text-white lg:text-5xl">{formatMoney(totals.pendingReimbursement)}</div>
+            <div className="mt-2 text-[1.8rem] font-black tracking-normal text-black dark:text-white lg:text-[2.5rem]">{formatMoney(totals.pendingReimbursement)}</div>
           </div>
-          <div className="border-l border-dashed border-[#ddd4c8] px-3 py-3.5 dark:border-white/15 lg:px-6 lg:py-5">
+          <div className="border-l border-dashed border-slate-200 px-3 py-3.5 dark:border-white/15 lg:px-6 lg:py-5">
             <div className="flex items-center gap-1.5 text-[0.82rem] font-semibold text-[#1e2521] dark:text-slate-200 lg:text-base">
               <span className="h-2.5 w-2.5 rounded-full bg-amber-500" />
               待报销
             </div>
-            <p className="mt-3 text-lg font-black text-amber-600 lg:mt-6 lg:text-2xl">{formatMoneyCompact(totals.pendingReimbursement)}</p>
+            <p className="mt-3 text-lg font-black text-amber-600 lg:mt-4 lg:text-xl">{formatMoneyCompact(totals.pendingReimbursement)}</p>
           </div>
-          <div className="border-l border-dashed border-[#ddd4c8] px-3 py-3.5 dark:border-white/15 lg:px-6 lg:py-5">
+          <div className="border-l border-dashed border-slate-200 px-3 py-3.5 dark:border-white/15 lg:px-6 lg:py-5">
             <div className="flex items-center gap-1.5 text-[0.82rem] font-semibold text-[#1e2521] dark:text-slate-200 lg:text-base">
               <span className="h-2.5 w-2.5 rounded-full bg-emerald-600" />
               已报销
             </div>
-            <p className="mt-3 text-lg font-black text-emerald-700 dark:text-emerald-300 lg:mt-6 lg:text-2xl">{formatMoneyCompact(totals.reimbursed)}</p>
+            <p className="mt-3 text-lg font-black text-emerald-700 dark:text-emerald-300 lg:mt-4 lg:text-xl">{formatMoneyCompact(totals.reimbursed)}</p>
           </div>
         </div>
       </section>
@@ -918,26 +919,26 @@ export function MoneyApp() {
 
   function SmartInlineBar() {
     return (
-      <section className="flex min-h-[3rem] items-center gap-2.5 rounded-lg border border-cyan-200/80 bg-cyan-50/70 px-3 shadow-[0_10px_24px_rgba(14,116,144,0.075)] dark:border-cyan-300/20 dark:bg-cyan-300/10 dark:shadow-none lg:min-h-[70px] lg:px-4">
-        <Sparkles className="h-5 w-5 shrink-0 text-cyan-700 dark:text-cyan-200 lg:h-7 lg:w-7" />
-        <button className="shrink-0 text-[0.95rem] font-black text-cyan-900 dark:text-cyan-100 lg:text-lg" onClick={openTextSmartDialog}>
+      <section className="flex items-center gap-2.5 rounded-xl border border-emerald-200/50 bg-gradient-to-r from-emerald-50/70 via-cyan-50/50 to-teal-50/40 px-3 py-2.5 shadow-sm dark:border-cyan-300/20 dark:from-cyan-950/30 dark:via-cyan-950/20 dark:to-transparent lg:px-4 lg:py-3">
+        <Sparkles className="h-5 w-5 shrink-0 text-teal-600 dark:text-cyan-200" />
+        <button className="shrink-0 text-[0.9rem] font-bold text-slate-800 dark:text-cyan-100 lg:text-[0.95rem]" onClick={openTextSmartDialog}>
           智能识别
         </button>
-        <div className="h-6 w-px bg-cyan-200 dark:bg-cyan-300/20 lg:h-8" />
-        <p className={cn('min-w-0 flex-1 truncate text-sm font-semibold lg:text-base', smartText ? 'text-[#3d4744] dark:text-slate-100' : 'text-slate-500 dark:text-slate-400')}>
-          {smartText || '例如：今天打车花了78'}
+        <div className="h-5 w-px bg-slate-300/50 dark:bg-cyan-300/20 lg:h-6" />
+        <p className={cn('min-w-0 flex-1 truncate text-sm lg:text-sm', smartText ? 'text-slate-700 dark:text-slate-100' : 'text-slate-400 dark:text-slate-400')}>
+          {smartText || '今天打车花了78'}
         </p>
         <button
-          className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-cyan-300 bg-white/80 text-cyan-800 shadow-sm transition hover:bg-cyan-50 disabled:opacity-50 dark:border-cyan-300/40 dark:bg-transparent dark:text-cyan-100 dark:hover:bg-cyan-300/10 lg:h-10 lg:w-10"
+          className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-slate-200/80 bg-white text-slate-500 shadow-sm transition hover:bg-slate-50 disabled:opacity-50 dark:border-cyan-300/40 dark:bg-transparent dark:text-cyan-100 dark:hover:bg-cyan-300/10 lg:h-8 lg:w-8"
           onClick={startSpeech}
           disabled={analyzing}
           aria-label="语音输入"
           title="语音输入"
         >
-          <Mic className={cn('h-4 w-4', listening && 'text-emerald-600 dark:text-emerald-300')} />
+          <Mic className={cn('h-3.5 w-3.5 lg:h-4 lg:w-4', listening && 'text-emerald-600 dark:text-emerald-300')} />
         </button>
         <button
-          className="inline-flex h-8 shrink-0 items-center justify-center rounded-md border border-cyan-600 bg-white px-3 text-sm font-black text-cyan-800 shadow-sm transition hover:bg-cyan-50 disabled:opacity-50 dark:border-cyan-300/50 dark:bg-transparent dark:text-cyan-100 dark:hover:bg-cyan-300/10 lg:h-10 lg:px-4"
+          className="inline-flex h-7 shrink-0 items-center justify-center rounded-lg border border-teal-600/60 bg-white px-3 text-sm font-bold text-teal-700 shadow-sm transition hover:bg-teal-50 disabled:opacity-50 dark:border-cyan-300/50 dark:bg-transparent dark:text-cyan-100 dark:hover:bg-cyan-300/10 lg:h-8 lg:px-4"
           onClick={() => analyzeSmartText()}
           disabled={analyzing || !smartText.trim()}
         >
@@ -950,20 +951,20 @@ export function MoneyApp() {
   function TodayList() {
     const previewExpenses = todayExpenses.slice(0, 2)
     return (
-      <section className="rounded-lg border border-[#e9e5dd] bg-white p-3.5 shadow-[0_12px_30px_rgba(24,32,28,0.065)] dark:border-white/10 dark:bg-white/[0.045] dark:shadow-none lg:p-4">
+      <section className="rounded-xl border border-slate-200/80 bg-white p-3.5 shadow-[0_2px_12px_rgba(0,0,0,0.06)] dark:border-white/10 dark:bg-white/[0.045] dark:shadow-none lg:p-4">
         <div className="flex items-center justify-between">
-          <h2 className="text-lg font-black text-black dark:text-white lg:text-2xl">今天</h2>
+          <h2 className="text-lg font-black text-black dark:text-white lg:text-xl">今天</h2>
           <p className="text-sm font-semibold text-slate-500 lg:text-base">{totals.countToday} 笔 · {formatMoney(totals.today)}</p>
         </div>
-        <div className="mt-3 overflow-hidden rounded-lg border border-[#ebe7df] dark:border-white/10 lg:mt-4">
+        <div className="mt-3 overflow-hidden rounded-lg border border-slate-200/80 dark:border-white/10 lg:mt-4">
           {todayExpenses.length ? (
             <>
               {previewExpenses.map((expense, index) => (
-                <div key={expense.id} className={cn(index > 0 && 'border-t border-[#ebe7df] dark:border-white/10')}>
+                <div key={expense.id} className={cn(index > 0 && 'border-t border-slate-200/80 dark:border-white/10')}>
                   <ExpenseRow expense={expense} compact />
                 </div>
               ))}
-              <button className="flex h-10 w-full items-center justify-center gap-2 text-sm font-semibold text-slate-500 hover:bg-slate-50 dark:text-slate-400 dark:hover:bg-white/5 lg:h-14 lg:text-base" onClick={() => setActiveTab('history')}>
+              <button className="flex h-10 w-full items-center justify-center gap-2 text-sm font-semibold text-slate-500 hover:bg-slate-50 dark:text-slate-400 dark:hover:bg-white/5 lg:h-12 lg:text-sm" onClick={() => setActiveTab('history')}>
                 查看全部记录
                 <ChevronRight className="h-5 w-5" />
               </button>
@@ -979,7 +980,7 @@ export function MoneyApp() {
   function StatsView() {
     return (
       <div className="mt-5 space-y-4">
-        <section className="rounded-lg border border-[#e6e1da] bg-white p-4 shadow-[0_10px_28px_rgba(20,30,24,0.07)] dark:border-white/10 dark:bg-white/[0.045] dark:shadow-none">
+        <section className="rounded-xl border border-slate-200/80 bg-white p-4 shadow-[0_2px_12px_rgba(0,0,0,0.06)] dark:border-white/10 dark:bg-white/[0.045] dark:shadow-none">
           <div className="flex items-center justify-between">
             <div>
               <h2 className="text-2xl font-black">统计</h2>
@@ -1007,7 +1008,7 @@ export function MoneyApp() {
         </section>
 
         <div className="grid gap-4 lg:grid-cols-2">
-          <section className="rounded-lg border border-[#e6e1da] bg-white p-4 shadow-[0_10px_28px_rgba(20,30,24,0.07)] dark:border-white/10 dark:bg-white/[0.045] dark:shadow-none">
+          <section className="rounded-xl border border-slate-200/80 bg-white p-4 shadow-[0_2px_12px_rgba(0,0,0,0.06)] dark:border-white/10 dark:bg-white/[0.045] dark:shadow-none">
             <div className="flex items-center justify-between">
               <h3 className="font-bold">分类分布</h3>
               <span className="text-xs text-slate-400">从高到低</span>
@@ -1040,7 +1041,7 @@ export function MoneyApp() {
             </div>
           </section>
 
-          <section className="rounded-lg border border-[#e6e1da] bg-white p-4 shadow-[0_10px_28px_rgba(20,30,24,0.07)] dark:border-white/10 dark:bg-white/[0.045] dark:shadow-none">
+          <section className="rounded-xl border border-slate-200/80 bg-white p-4 shadow-[0_2px_12px_rgba(0,0,0,0.06)] dark:border-white/10 dark:bg-white/[0.045] dark:shadow-none">
             <div className="flex items-center justify-between">
               <h3 className="font-bold">行程报销</h3>
               <span className="text-xs text-slate-400">预算对比</span>
@@ -1050,7 +1051,7 @@ export function MoneyApp() {
                 stats.tripTotals.map(({ trip, amount }) => {
                   const percent = trip.budget > 0 ? Math.min(100, (amount / trip.budget) * 100) : 0
                   return (
-                    <div key={trip.id} className="rounded-lg border border-[#e6e1da] bg-slate-50 p-3 dark:border-white/10 dark:bg-black/20">
+                    <div key={trip.id} className="rounded-lg border border-slate-200/80 bg-slate-50 p-3 dark:border-white/10 dark:bg-black/20">
                       <div className="flex items-start justify-between gap-3">
                         <div>
                           <p className="font-semibold">{trip.name}</p>
@@ -1078,7 +1079,7 @@ export function MoneyApp() {
   function HistoryView() {
     return (
       <div className="mt-5 space-y-4">
-        <section className="rounded-lg border border-[#e6e1da] bg-white p-4 shadow-[0_10px_28px_rgba(20,30,24,0.07)] dark:border-white/10 dark:bg-white/[0.045] dark:shadow-none">
+        <section className="rounded-lg border border-slate-200/80 bg-white p-4 shadow-[0_10px_28px_rgba(20,30,24,0.07)] dark:border-white/10 dark:bg-white/[0.045] dark:shadow-none">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <h2 className="text-2xl font-black">历史</h2>
@@ -1091,10 +1092,10 @@ export function MoneyApp() {
                   value={search}
                   onChange={(event) => setSearch(event.target.value)}
                   placeholder="搜索标题、分类、金额"
-                  className="h-10 w-full rounded-md border border-[#dfddd7] bg-white pl-9 pr-3 text-sm outline-none transition focus:border-emerald-600/60 dark:border-white/10 dark:bg-black/20 dark:focus:border-emerald-300/60"
+                  className="h-10 w-full rounded-md border border-slate-200 bg-white pl-9 pr-3 text-sm outline-none transition focus:border-emerald-600/60 dark:border-white/10 dark:bg-black/20 dark:focus:border-emerald-300/60"
                 />
               </div>
-              <button className="inline-flex h-10 shrink-0 items-center gap-2 rounded-md border border-[#dfddd7] bg-white px-3 text-sm font-semibold text-slate-700 hover:bg-slate-50 dark:border-white/10 dark:bg-black/20 dark:text-slate-200 dark:hover:bg-white/10" onClick={exportCsv}>
+              <button className="inline-flex h-10 shrink-0 items-center gap-2 rounded-md border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 hover:bg-slate-50 dark:border-white/10 dark:bg-black/20 dark:text-slate-200 dark:hover:bg-white/10" onClick={exportCsv}>
                 <FileText className="h-4 w-4" />
                 导出
               </button>
@@ -1104,7 +1105,7 @@ export function MoneyApp() {
         <div className="space-y-4">
           {groupedExpenses.length ? (
             groupedExpenses.map(([date, list]) => (
-              <section key={date} className="rounded-lg border border-[#e6e1da] bg-white p-3 shadow-[0_10px_28px_rgba(20,30,24,0.06)] dark:border-white/10 dark:bg-white/[0.035] dark:shadow-none">
+              <section key={date} className="rounded-xl border border-slate-200/80 bg-white p-3 shadow-[0_2px_12px_rgba(0,0,0,0.06)] dark:border-white/10 dark:bg-white/[0.035] dark:shadow-none">
                 <div className="mb-3 flex items-center justify-between px-1">
                   <h3 className="font-bold">{date}</h3>
                   <span className="text-sm font-semibold text-slate-700 dark:text-rose-200">-{formatMoney(list.reduce((sum, item) => sum + Number(item.amount || 0), 0)).replace('¥ ', '¥')}</span>
@@ -1125,7 +1126,7 @@ export function MoneyApp() {
   function SettingsView() {
     return (
       <div className="mt-5 grid gap-4 xl:grid-cols-2">
-        <section className="rounded-lg border border-[#e6e1da] bg-white p-4 shadow-[0_10px_28px_rgba(20,30,24,0.07)] dark:border-white/10 dark:bg-white/[0.045] dark:shadow-none">
+        <section className="rounded-xl border border-slate-200/80 bg-white p-4 shadow-[0_2px_12px_rgba(0,0,0,0.06)] dark:border-white/10 dark:bg-white/[0.045] dark:shadow-none">
           <div className="flex items-center justify-between">
             <div>
               <h2 className="text-2xl font-black">分类管理</h2>
@@ -1154,7 +1155,7 @@ export function MoneyApp() {
               新增
             </button>
           </form>
-          <div className="mt-4 divide-y divide-[#eeeae3] dark:divide-white/10">
+          <div className="mt-4 divide-y divide-slate-200/80 dark:divide-white/10">
             {categories.map((category) => {
               const Icon = getCategoryIcon(category.icon)
               return (
@@ -1179,7 +1180,7 @@ export function MoneyApp() {
           </div>
         </section>
 
-        <section className="rounded-lg border border-[#e6e1da] bg-white p-4 shadow-[0_10px_28px_rgba(20,30,24,0.07)] dark:border-white/10 dark:bg-white/[0.045] dark:shadow-none">
+        <section className="rounded-lg border border-slate-200/80 bg-white p-4 shadow-[0_10px_28px_rgba(20,30,24,0.07)] dark:border-white/10 dark:bg-white/[0.045] dark:shadow-none">
           <div className="flex items-center justify-between">
             <div>
               <h2 className="text-2xl font-black">行程管理</h2>
@@ -1233,7 +1234,7 @@ export function MoneyApp() {
           </form>
           <div className="mt-4 space-y-2">
             {trips.map((trip) => (
-              <div key={trip.id} className="rounded-lg border border-[#e6e1da] bg-slate-50 p-3 dark:border-white/10 dark:bg-black/20">
+              <div key={trip.id} className="rounded-lg border border-slate-200/80 bg-slate-50 p-3 dark:border-white/10 dark:bg-black/20">
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <p className="truncate font-semibold">{trip.name}</p>
@@ -1260,10 +1261,10 @@ export function MoneyApp() {
     const CategoryIcon = getCategoryIcon(selectedCategory?.icon)
 
     return (
-      <section className={cn('rounded-lg border border-[#e7e2db] bg-white p-3.5 shadow-[0_14px_34px_rgba(24,32,28,0.075)] dark:border-white/10 dark:bg-white/[0.045] dark:shadow-none lg:p-5', compact && 'bg-white/80 dark:bg-white/[0.035]')}>
+      <section className={cn('rounded-xl border border-slate-200/80 bg-white p-3.5 shadow-[0_2px_12px_rgba(0,0,0,0.06)] dark:border-white/10 dark:bg-white/[0.045] dark:shadow-none lg:p-5', compact && 'bg-white/80 dark:bg-white/[0.035]')}>
         <div className="mb-3.5 flex items-center justify-between lg:mb-5">
-          <h2 className="flex items-center gap-2 text-lg font-black text-black dark:text-white lg:gap-2.5 lg:text-2xl">
-            <Pencil className="h-5 w-5 text-emerald-700 dark:text-emerald-300 lg:h-7 lg:w-7" />
+          <h2 className="flex items-center gap-2 text-lg font-black text-black dark:text-white lg:gap-2.5 lg:text-xl">
+            <Pencil className="h-5 w-5 text-emerald-700 dark:text-emerald-300 lg:h-5 lg:w-5" />
             {form.id ? '编辑账单' : '快速记账'}
           </h2>
           {form.id ? (
@@ -1279,10 +1280,10 @@ export function MoneyApp() {
 
         <form onSubmit={saveExpense} className="space-y-3 lg:space-y-4">
           <div className="grid grid-cols-[minmax(0,0.9fr)_minmax(0,1.45fr)] gap-2 lg:gap-3">
-            <label className="block min-w-0 rounded-lg border border-[#dedbd4] bg-white/95 px-3 py-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.82)] dark:border-white/10 dark:bg-black/20 lg:px-4 lg:py-3">
+            <label className="block min-w-0 rounded-lg border border-slate-200 bg-white/95 px-3 py-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.82)] dark:border-white/10 dark:bg-black/20 lg:px-4 lg:py-3">
               <span className="text-[0.82rem] font-semibold text-slate-500 dark:text-slate-400 lg:text-base">金额</span>
               <div className="mt-2 flex items-end gap-1.5 lg:mt-4 lg:gap-2">
-                <span className="pb-0.5 text-xl font-black text-[#6b7078] dark:text-slate-300 lg:pb-1 lg:text-3xl">¥</span>
+                <span className="pb-0.5 text-xl font-black text-[#6b7078] dark:text-slate-300 lg:pb-1 lg:text-2xl">¥</span>
                 <input
                   type="number"
                   inputMode="decimal"
@@ -1291,23 +1292,23 @@ export function MoneyApp() {
                   value={form.amount}
                   onChange={(event) => patchForm({ amount: event.target.value })}
                   placeholder="0.00"
-                  className="min-w-0 flex-1 bg-transparent text-[1.65rem] font-black leading-none text-[#6b7078] outline-none placeholder:text-[#6b7078] dark:text-slate-200 dark:placeholder:text-slate-500 lg:text-4xl"
+                  className="min-w-0 flex-1 bg-transparent text-[1.65rem] font-black leading-none text-[#6b7078] outline-none placeholder:text-[#6b7078] dark:text-slate-200 dark:placeholder:text-slate-500 lg:text-3xl"
                 />
               </div>
             </label>
-            <label className="block min-w-0 rounded-lg border border-[#dedbd4] bg-white/95 px-3 py-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.82)] dark:border-white/10 dark:bg-black/20 lg:px-4 lg:py-3">
+            <label className="block min-w-0 rounded-lg border border-slate-200 bg-white/95 px-3 py-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.82)] dark:border-white/10 dark:bg-black/20 lg:px-4 lg:py-3">
               <span className="text-[0.82rem] font-semibold text-slate-500 dark:text-slate-400 lg:text-base">标题</span>
               <input
                 value={form.title}
                 onChange={(event) => patchForm({ title: event.target.value })}
                 placeholder="打车 / 餐饮 / 酒店"
-                className="mt-2.5 w-full min-w-0 bg-transparent text-[1.22rem] font-black text-[#6b7078] outline-none placeholder:text-[#6b7078] dark:text-slate-100 dark:placeholder:text-slate-500 lg:mt-5 lg:text-3xl"
+                className="mt-2.5 w-full min-w-0 bg-transparent text-[1.22rem] font-black text-[#6b7078] outline-none placeholder:text-[#6b7078] dark:text-slate-100 dark:placeholder:text-slate-500 lg:mt-4 lg:text-xl"
               />
             </label>
           </div>
 
           <div className="grid grid-cols-3 gap-2 lg:gap-3">
-            <label className="block min-w-0 rounded-lg border border-[#dedbd4] bg-white/95 px-2.5 py-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.82)] dark:border-white/10 dark:bg-black/20 lg:px-3 lg:py-3">
+            <label className="block min-w-0 rounded-lg border border-slate-200 bg-white/95 px-2.5 py-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.82)] dark:border-white/10 dark:bg-black/20 lg:px-3 lg:py-3">
               <span className="text-[0.82rem] font-semibold text-slate-500 dark:text-slate-400 lg:text-base">分类</span>
               <div className="mt-2 flex items-center gap-1.5 lg:mt-3 lg:gap-2">
                 <CategoryIcon className="h-5 w-5 shrink-0 text-slate-500 dark:text-slate-300 lg:h-6 lg:w-6" />
@@ -1318,7 +1319,7 @@ export function MoneyApp() {
                 </select>
               </div>
             </label>
-            <label className="block min-w-0 rounded-lg border border-[#dedbd4] bg-white/95 px-2.5 py-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.82)] dark:border-white/10 dark:bg-black/20 lg:px-3 lg:py-3">
+            <label className="block min-w-0 rounded-lg border border-slate-200 bg-white/95 px-2.5 py-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.82)] dark:border-white/10 dark:bg-black/20 lg:px-3 lg:py-3">
               <span className="text-[0.82rem] font-semibold text-slate-500 dark:text-slate-400 lg:text-base">行程</span>
               <div className="mt-2 flex items-center gap-1.5 lg:mt-3 lg:gap-2">
                 <Briefcase className="h-5 w-5 shrink-0 text-slate-500 dark:text-slate-300 lg:h-6 lg:w-6" />
@@ -1330,7 +1331,7 @@ export function MoneyApp() {
                 </select>
               </div>
             </label>
-            <label className="block min-w-0 rounded-lg border border-[#dedbd4] bg-white/95 px-2.5 py-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.82)] dark:border-white/10 dark:bg-black/20 lg:px-3 lg:py-3">
+            <label className="block min-w-0 rounded-lg border border-slate-200 bg-white/95 px-2.5 py-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.82)] dark:border-white/10 dark:bg-black/20 lg:px-3 lg:py-3">
               <span className="text-[0.82rem] font-semibold text-slate-500 dark:text-slate-400 lg:text-base">发票</span>
               <div className="mt-2 flex items-center gap-1.5 lg:mt-3 lg:gap-2">
                 <Receipt className="h-5 w-5 shrink-0 text-slate-500 dark:text-slate-300 lg:h-6 lg:w-6" />
@@ -1364,14 +1365,14 @@ export function MoneyApp() {
             <Info className="h-5 w-5 shrink-0 text-slate-500 dark:text-slate-400 lg:h-6 lg:w-6" />
           </div>
 
-          <details className="group rounded-lg border border-[#e6e1da] bg-[#fffdfa] dark:border-white/10 dark:bg-black/15">
+          <details className="group rounded-lg border border-slate-200/80 bg-[#fffdfa] dark:border-white/10 dark:bg-black/15">
             <summary className="flex h-10 cursor-pointer list-none items-center gap-2 px-3 text-sm font-semibold text-slate-500 [&::-webkit-details-marker]:hidden dark:text-slate-400 lg:h-11">
               <MoreHorizontal className="h-4 w-4" />
               更多信息
               <span className="min-w-0 flex-1 truncate text-right text-xs">{form.expense_date} · {form.expense_time}</span>
               <ChevronRight className="h-4 w-4 transition group-open:rotate-90" />
             </summary>
-            <div className="grid gap-3 border-t border-[#e6e1da] p-3 dark:border-white/10 lg:grid-cols-2">
+            <div className="grid gap-3 border-t border-slate-200/80 p-3 dark:border-white/10 lg:grid-cols-2">
               <Field label="日期">
                 <input type="date" value={form.expense_date} onChange={(event) => patchForm({ expense_date: event.target.value })} className="field-input" />
               </Field>
@@ -1400,7 +1401,7 @@ export function MoneyApp() {
 
           <button
             disabled={saving || !form.amount || !form.title.trim()}
-            className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-emerald-700 via-emerald-600 to-emerald-700 text-lg font-black text-white shadow-[0_12px_26px_rgba(4,120,87,0.24)] transition hover:brightness-105 disabled:opacity-75 dark:from-emerald-400 dark:via-emerald-300 dark:to-emerald-400 dark:text-slate-950 lg:h-16 lg:gap-3 lg:text-2xl"
+            className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-emerald-700 via-emerald-600 to-emerald-700 text-lg font-black text-white shadow-[0_12px_26px_rgba(4,120,87,0.24)] transition hover:brightness-105 disabled:opacity-75 dark:from-emerald-400 dark:via-emerald-300 dark:to-emerald-400 dark:text-slate-950 lg:h-14 lg:gap-2.5 lg:text-lg"
           >
             {saving ? <Loader2 className="h-5 w-5 animate-spin lg:h-6 lg:w-6" /> : <span className="flex h-6 w-6 items-center justify-center rounded-full border-2 border-current lg:h-8 lg:w-8"><Plus className="h-4 w-4 lg:h-5 lg:w-5" /></span>}
             {form.id ? '保存修改' : '添加账单'}
@@ -1414,22 +1415,22 @@ export function MoneyApp() {
     const Icon = getCategoryIcon(expense.category_icon)
     const isPending = expense.reimbursement_status === 'pending'
     return (
-      <article className={cn('bg-white p-3 transition hover:bg-slate-50 dark:bg-transparent dark:hover:bg-white/[0.04] lg:p-4', !compact && 'rounded-lg border border-[#e6e1da] dark:border-white/10')}>
+      <article className={cn('bg-white p-3 transition hover:bg-slate-50 dark:bg-transparent dark:hover:bg-white/[0.04] lg:p-4', !compact && 'rounded-lg border border-slate-200/80 dark:border-white/10')}>
         <div className="flex items-center gap-3 lg:gap-4">
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg lg:h-16 lg:w-16" style={{ backgroundColor: `${expense.category_color || '#0f9f8f'}22`, color: expense.category_color || '#0f9f8f' }}>
-            <Icon className="h-5 w-5 lg:h-8 lg:w-8" />
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg lg:h-12 lg:w-12" style={{ backgroundColor: `${expense.category_color || '#0f9f8f'}22`, color: expense.category_color || '#0f9f8f' }}>
+            <Icon className="h-5 w-5 lg:h-6 lg:w-6" />
           </span>
           <div className="min-w-0 flex-1">
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
-                <p className="truncate text-base font-black text-black dark:text-white lg:text-2xl">{expense.title}</p>
-                <p className="mt-1 truncate text-xs font-medium text-slate-500 dark:text-slate-400 lg:mt-2 lg:text-base">
+                <p className="truncate text-base font-black text-black dark:text-white lg:text-lg">{expense.title}</p>
+                <p className="mt-1 truncate text-xs font-medium text-slate-500 dark:text-slate-400 lg:mt-1.5 lg:text-sm">
                   {expense.expense_time || '--:--'} · {expense.category_name || '未分类'}{expense.trip_name ? ` · ${expense.trip_name}` : ''}
                 </p>
               </div>
               <div className="text-right">
-                <p className="text-base font-black text-black dark:text-white lg:text-2xl">-{formatMoneyCompact(expense.amount, 2)}</p>
-                <div className="mt-1.5 flex items-center justify-end gap-2 lg:mt-3">
+                <p className="text-base font-black text-black dark:text-white lg:text-lg">-{formatMoneyCompact(expense.amount, 2)}</p>
+                <div className="mt-1.5 flex items-center justify-end gap-2 lg:mt-2">
                   <span className={cn('rounded-md px-2 py-1 text-xs font-bold lg:text-sm', expense.invoice_status === 'received' ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-300/15 dark:text-emerald-200' : 'bg-amber-100 text-amber-800 dark:bg-amber-300/15 dark:text-amber-200')}>
                     {invoiceLabels[expense.invoice_status] || expense.invoice_status}
                   </span>
@@ -1464,7 +1465,7 @@ export function MoneyApp() {
     if (!smartOpen) return null
     return (
       <div className="fixed inset-0 z-50 flex h-dvh items-end justify-center bg-black/35 px-3 pb-[max(env(safe-area-inset-bottom),0.75rem)] pt-[max(env(safe-area-inset-top),0.75rem)] backdrop-blur-sm dark:bg-black/70 sm:items-center sm:p-6">
-        <section className="max-h-[calc(100dvh-env(safe-area-inset-top)-env(safe-area-inset-bottom)-1rem)] w-full max-w-lg overflow-y-auto overscroll-contain rounded-t-lg border border-[#e6e1da] bg-white p-4 shadow-float custom-scrollbar dark:border-white/10 dark:bg-[#101624] sm:rounded-lg">
+        <section className="max-h-[calc(100dvh-env(safe-area-inset-top)-env(safe-area-inset-bottom)-1rem)] w-full max-w-lg overflow-y-auto overscroll-contain rounded-t-lg border border-slate-200/80 bg-white p-4 shadow-float custom-scrollbar dark:border-white/10 dark:bg-[#101624] sm:rounded-lg">
           <div className="flex items-center justify-between">
             <div>
               <h2 className="text-xl font-black">{smartMode === 'voice' ? '语音记账' : '智能记账'}</h2>
@@ -1478,7 +1479,7 @@ export function MoneyApp() {
           </div>
           {smartMode === 'voice' ? (
             <div className="mt-6">
-              <div className="flex min-h-[270px] flex-col items-center justify-center rounded-lg border border-[#e6e1da] bg-slate-50 px-4 py-6 dark:border-white/10 dark:bg-black/20">
+              <div className="flex min-h-[270px] flex-col items-center justify-center rounded-lg border border-slate-200/80 bg-slate-50 px-4 py-6 dark:border-white/10 dark:bg-black/20">
                 <div className="relative flex h-32 w-32 items-center justify-center">
                   {listening ? (
                     <>
@@ -1504,7 +1505,7 @@ export function MoneyApp() {
                   <p className="text-2xl font-black">{listening ? '正在识别' : analyzing ? '正在解析' : '语音待命'} {formatVoiceTime(recordingSeconds)}</p>
                   <p className="mt-2 text-sm text-slate-400">说出金额、标题、分类或发票状态</p>
                 </div>
-                <div className="mt-5 w-full rounded-lg border border-[#e6e1da] bg-white px-3 py-3 text-left dark:border-white/10 dark:bg-white/[0.05]">
+                <div className="mt-5 w-full rounded-lg border border-slate-200/80 bg-white px-3 py-3 text-left dark:border-white/10 dark:bg-white/[0.05]">
                   <p className="text-xs font-semibold text-slate-500">识别结果</p>
                   <textarea
                     value={smartText}
@@ -1516,7 +1517,7 @@ export function MoneyApp() {
                     onFocus={discardVoiceSession}
                     placeholder="识别到的文字会显示在这里；识别失败时可以直接手动输入或修改。"
                     rows={3}
-                    className="mt-2 min-h-[88px] w-full resize-none rounded-md border border-[#dfddd7] bg-white px-3 py-2 text-base leading-relaxed text-[#111815] outline-none placeholder:text-slate-400 focus:border-blue-400/60 dark:border-white/10 dark:bg-black/20 dark:text-slate-100 dark:placeholder:text-slate-500 dark:focus:border-blue-300/60"
+                    className="mt-2 min-h-[88px] w-full resize-none rounded-md border border-slate-200 bg-white px-3 py-2 text-base leading-relaxed text-[#111815] outline-none placeholder:text-slate-400 focus:border-blue-400/60 dark:border-white/10 dark:bg-black/20 dark:text-slate-100 dark:placeholder:text-slate-500 dark:focus:border-blue-300/60"
                   />
                 </div>
               </div>
@@ -1543,7 +1544,7 @@ export function MoneyApp() {
                   onFocus={discardVoiceSession}
                   placeholder="例如：今天晚上客户招待吃饭 168 元 已开票"
                   rows={4}
-                  className="min-h-[112px] w-full resize-none rounded-lg border border-[#dfddd7] bg-white px-3 py-3 text-base leading-relaxed outline-none focus:border-emerald-600/60 dark:border-white/10 dark:bg-black/20 dark:focus:border-emerald-300/60 sm:text-sm"
+                  className="min-h-[112px] w-full resize-none rounded-lg border border-slate-200 bg-white px-3 py-3 text-base leading-relaxed outline-none focus:border-emerald-600/60 dark:border-white/10 dark:bg-black/20 dark:focus:border-emerald-300/60 sm:text-sm"
                 />
               </div>
               <button className="mt-3 inline-flex h-10 w-full items-center justify-center gap-2 rounded-md bg-blue-400 text-sm font-bold text-slate-950 hover:bg-blue-300 disabled:opacity-60" onClick={() => analyzeSmartText()} disabled={analyzing || !smartText.trim()}>
@@ -1553,7 +1554,7 @@ export function MoneyApp() {
             </>
           )}
           {smartDraft ? (
-            <div className="mt-4 rounded-lg border border-[#e6e1da] bg-slate-50 p-3 dark:border-white/10 dark:bg-black/20">
+            <div className="mt-4 rounded-lg border border-slate-200/80 bg-slate-50 p-3 dark:border-white/10 dark:bg-black/20">
               <div className="mb-3 flex items-center justify-between">
                 <p className="text-sm font-bold">快速修改</p>
                 <span className="text-xs text-slate-400">确认后直接添加</span>
@@ -1622,7 +1623,7 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
 
 function DesktopNav({ activeTab, setActiveTab, totals }: { activeTab: TabKey; setActiveTab: (tab: TabKey) => void; totals: { month: number; pendingReimbursement: number; reimbursed: number } }) {
   return (
-    <aside className="hidden h-dvh border-r border-[#e8e3dc] bg-white/70 px-5 py-7 dark:border-white/10 dark:bg-white/[0.035] lg:block">
+    <aside className="hidden h-dvh border-r border-slate-200/80 bg-white/90 px-5 py-7 dark:border-white/10 dark:bg-white/[0.035] lg:block">
       <div className="flex items-center gap-3">
         <div className="flex h-11 w-11 items-center justify-center rounded-lg bg-emerald-700 text-white dark:bg-emerald-400 dark:text-slate-950">
           <Wallet className="h-6 w-6" />
@@ -1651,7 +1652,7 @@ function DesktopNav({ activeTab, setActiveTab, totals }: { activeTab: TabKey; se
           )
         })}
       </div>
-      <div className="mt-8 rounded-lg border border-[#e6e1da] bg-white p-4 shadow-[0_10px_26px_rgba(20,30,24,0.07)] dark:border-white/10 dark:bg-black/20 dark:shadow-none">
+      <div className="mt-8 rounded-xl border border-slate-200/80 bg-white p-4 shadow-[0_2px_12px_rgba(0,0,0,0.06)] dark:border-white/10 dark:bg-black/20 dark:shadow-none">
         <p className="text-xs text-slate-500 dark:text-slate-400">本月支出</p>
         <p className="mt-2 text-2xl font-black text-black dark:text-white">{formatMoney(totals.month)}</p>
         <div className="mt-4 grid grid-cols-2 gap-2 text-xs">
@@ -1686,28 +1687,32 @@ function TopBar({
 }) {
   return (
     <header className="flex items-center justify-between gap-3">
-      <div className="flex min-w-0 items-center gap-1.5 text-[0.95rem] font-semibold text-slate-700 dark:text-slate-200 lg:text-xl">
-        <span className="shrink-0">{dateLabel}</span>
-        <span className="shrink-0 text-slate-400 dark:text-slate-500">·</span>
-        <span className="min-w-0 truncate">{tripLabel}</span>
-        <ChevronRight className="h-4 w-4 shrink-0 rotate-90 text-slate-500 dark:text-slate-400 lg:h-5 lg:w-5" />
+      <div className="min-w-0">
+        <h1 className="text-[1.3rem] font-black text-emerald-700 dark:text-white lg:hidden">myMoney</h1>
+        <div className="mt-0.5 flex min-w-0 items-center gap-1 text-[0.82rem] text-slate-500 dark:text-slate-400 lg:mt-0 lg:text-[0.95rem] lg:font-semibold lg:text-slate-700 dark:lg:text-slate-200">
+          <span className="shrink-0 lg:hidden">{tripLabel} · {dateLabel}</span>
+          <span className="hidden shrink-0 lg:inline">{dateLabel}</span>
+          <span className="hidden shrink-0 text-slate-400 dark:text-slate-500 lg:inline">·</span>
+          <span className="hidden min-w-0 truncate lg:inline">{tripLabel}</span>
+        </div>
       </div>
       <div className="flex shrink-0 items-center gap-2">
         <button
-          className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-[#ddd8d0] bg-white/95 text-emerald-700 shadow-[0_6px_16px_rgba(20,30,24,0.10)] transition hover:bg-slate-50 dark:border-white/10 dark:bg-white/[0.08] dark:text-emerald-300 dark:hover:bg-white/[0.12]"
+          className="hidden h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 shadow-sm transition hover:bg-slate-50 dark:border-white/10 dark:bg-white/[0.08] dark:text-slate-300 dark:hover:bg-white/[0.12] lg:inline-flex"
           onClick={onToggleTheme}
           aria-label="切换皮肤"
           title="切换皮肤"
         >
-          {isDark ? <Sun className="h-5 w-5 text-amber-300" /> : <Moon className="h-5 w-5" />}
+          {isDark ? <Sun className="h-4 w-4 text-amber-400" /> : <Moon className="h-4 w-4" />}
         </button>
         <button
-          className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-[#ddd8d0] bg-white/95 text-emerald-700 shadow-[0_6px_16px_rgba(20,30,24,0.10)] transition hover:bg-slate-50 dark:border-white/10 dark:bg-white/[0.08] dark:text-emerald-300 dark:hover:bg-white/[0.12]"
+          className="inline-flex h-9 items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 dark:border-white/10 dark:bg-white/[0.08] dark:text-slate-200 dark:hover:bg-white/[0.12]"
           onClick={onReload}
           aria-label="同步"
           title="同步"
         >
-          <RefreshCcw className={cn('h-5 w-5', loading && 'animate-spin')} />
+          <RefreshCcw className={cn('h-3.5 w-3.5', loading && 'animate-spin')} />
+          同步
         </button>
       </div>
     </header>
@@ -1717,7 +1722,7 @@ function TopBar({
 function BottomNav({ activeTab, setActiveTab }: { activeTab: TabKey; setActiveTab: (tab: TabKey) => void }) {
   return (
     <nav className="fixed inset-x-0 bottom-0 z-40 px-4 pb-[max(env(safe-area-inset-bottom),10px)] pt-2 lg:hidden">
-      <div className="mx-auto grid max-w-md grid-cols-4 gap-1 rounded-lg border border-[#eeeae2] bg-white/[0.96] p-1.5 shadow-[0_-12px_34px_rgba(24,32,28,0.105)] backdrop-blur-xl dark:border-white/10 dark:bg-[#090d18]/95">
+      <div className="mx-auto grid max-w-md grid-cols-4 gap-1 rounded-2xl border border-slate-200/80 bg-white/[0.97] p-1.5 shadow-[0_-4px_20px_rgba(0,0,0,0.08)] backdrop-blur-xl dark:border-white/10 dark:bg-[#090d18]/95">
         {tabs.map((tab) => {
           const Icon = tab.icon
           return (
@@ -1741,7 +1746,7 @@ function BottomNav({ activeTab, setActiveTab }: { activeTab: TabKey; setActiveTa
 
 function EmptyState({ icon: Icon, title, detail }: { icon: ComponentType<{ className?: string }>; title: string; detail: string }) {
   return (
-    <div className="flex min-h-[128px] flex-col items-center justify-center rounded-lg border border-dashed border-[#dedbd4] bg-slate-50 px-4 py-6 text-center dark:border-white/10 dark:bg-black/15">
+    <div className="flex min-h-[128px] flex-col items-center justify-center rounded-lg border border-dashed border-slate-200 bg-slate-50 px-4 py-6 text-center dark:border-white/10 dark:bg-black/15">
       <Icon className="h-8 w-8 text-slate-500" />
       <p className="mt-3 font-semibold text-slate-700 dark:text-slate-200">{title}</p>
       <p className="mt-1 max-w-xs text-xs text-slate-500">{detail}</p>
