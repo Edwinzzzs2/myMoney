@@ -69,13 +69,14 @@ export function normalizeExpensePayload(data: ExpensePayload) {
 }
 
 export async function getBootstrapData() {
-  const [categories, trips, expenses] = await Promise.all([
+  const [categories, trips, archivedTrips, expenses] = await Promise.all([
     query(`${categorySelect} ORDER BY sort_order ASC, id ASC`),
     query(`${tripSelect} WHERE status <> 'archived' ORDER BY created_at DESC, id DESC`),
+    query(`${tripSelect} WHERE status = 'archived' ORDER BY updated_at DESC, id DESC`),
     query(`${expenseSelect} ORDER BY e.expense_date DESC, e.created_at DESC, e.id DESC`),
   ])
 
-  return { categories, trips, expenses }
+  return { categories, trips, archivedTrips, expenses }
 }
 
 export function buildSummary(expenses: any[]) {

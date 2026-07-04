@@ -5,17 +5,17 @@ import { ThemeProvider } from '@/components/theme-provider'
 import { PwaRegister } from '@/app/components/pwa/pwa-register'
 
 export const metadata: Metadata = {
-  title: 'myMoney - 出差报销记账',
+  title: '记账 - 出差报销记录',
   description: '面向出差报销场景的轻量记账系统',
   icons: {
-    icon: '/favicon.svg',
-    apple: '/pwa-192.svg',
+    icon: '/favicon.png',
+    apple: '/apple-touch-icon.png',
   },
   manifest: '/manifest.webmanifest',
   appleWebApp: {
     capable: true,
     statusBarStyle: 'black-translucent',
-    title: 'myMoney',
+    title: '记账',
   },
 }
 

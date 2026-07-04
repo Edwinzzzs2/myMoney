@@ -1,4 +1,4 @@
-# myMoney
+# 记账
 
 出差报销记账系统，框架与 `LuckyStunWeb-next` 保持一致：Next App Router、Tailwind CSS、shadcn 风格组件、lucide 图标、PostgreSQL。
 

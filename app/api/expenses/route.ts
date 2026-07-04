@@ -39,3 +39,12 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ message: e.message || '保存账单失败' }, { status: 400 })
   }
 }
+
+export async function DELETE() {
+  try {
+    await execute('DELETE FROM my_money_expenses')
+    return NextResponse.json({ ok: true })
+  } catch (e: any) {
+    return NextResponse.json({ message: e.message || '清空账单失败' }, { status: 500 })
+  }
+}
