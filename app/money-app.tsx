@@ -69,7 +69,7 @@ import {
 import { cn } from '@/lib/utils'
 
 type HistoryFilter = 'all' | 'invoice' | 'reimbursement' | 'reimbursed'
-type SettingsPanel = 'ledger' | 'categories' | 'trips' | 'payment' | 'invoice' | 'export' | null
+type SettingsPanel = 'ledger' | 'categories' | 'trips' | 'archive' | 'payment' | 'invoice' | 'export' | null
 type ZipFile = { name: string; data: Uint8Array }
 type CategoryIconValue = keyof typeof iconMap
 
@@ -90,6 +90,7 @@ export function MoneyApp() {
   const [activeTab, setActiveTab] = useState<TabKey>('record')
   const [categories, setCategories] = useState<Category[]>([])
   const [trips, setTrips] = useState<Trip[]>([])
+  const [archivedTrips, setArchivedTrips] = useState<Trip[]>([])
   const [expenses, setExpenses] = useState<Expense[]>([])
   const [form, setForm] = useState<ExpenseFormState>(makeBlankForm())
   const [search, setSearch] = useState('')
@@ -116,6 +117,8 @@ export function MoneyApp() {
   const voiceManualEditedRef = useRef(false)
 
   const activeCategories = useMemo(() => categories.filter((item) => item.is_active), [categories])
+  const archivedCategories = useMemo(() => categories.filter((item) => !item.is_active), [categories])
+  const archivedItemCount = archivedCategories.length + archivedTrips.length
 
   const totals = useMemo(() => {
     const currentDate = todayISO()
@@ -237,6 +240,7 @@ export function MoneyApp() {
       const data = await fetchJson<BootstrapData>('/api/bootstrap')
       setCategories(data.categories)
       setTrips(data.trips)
+      setArchivedTrips(data.archivedTrips || [])
       setExpenses(data.expenses)
       setForm((current) => ({
         ...current,
@@ -398,6 +402,38 @@ export function MoneyApp() {
       await loadData()
     } catch (e: any) {
       setError(e.message || '归档行程失败')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function deleteArchivedCategory(category: Category) {
+    const usageCount = getCategoryUsageCount(category.id)
+    if (usageCount > 0) return
+    if (!window.confirm(`彻底删除「${category.name}」分类？此操作无法恢复。`)) return
+    setSaving(true)
+    setError('')
+    try {
+      await fetchJson(`/api/categories/${category.id}?hard=1`, { method: 'DELETE' })
+      await loadData()
+    } catch (e: any) {
+      setError(e.message || '删除归档分类失败')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function deleteArchivedTrip(trip: Trip) {
+    const usageCount = getTripUsageCount(trip.id)
+    if (usageCount > 0) return
+    if (!window.confirm(`彻底删除「${trip.name}」行程？此操作无法恢复。`)) return
+    setSaving(true)
+    setError('')
+    try {
+      await fetchJson(`/api/trips/${trip.id}?hard=1`, { method: 'DELETE' })
+      await loadData()
+    } catch (e: any) {
+      setError(e.message || '删除归档行程失败')
     } finally {
       setSaving(false)
     }
@@ -702,6 +738,14 @@ export function MoneyApp() {
     setVoiceStatus(smartText.trim() ? '语音输入已填入，可以继续修改或解析' : '没有识别到内容，可以再试一次')
   }
 
+  function getCategoryUsageCount(categoryId: string) {
+    return expenses.filter((expense) => expense.category_id === categoryId).length
+  }
+
+  function getTripUsageCount(tripId: string) {
+    return expenses.filter((expense) => expense.trip_id === tripId).length
+  }
+
   function getExportExpenses(tripId = exportTripId) {
     return tripId ? expenses.filter((expense) => expense.trip_id === tripId) : expenses
   }
@@ -754,10 +798,6 @@ export function MoneyApp() {
     }
     const { csv } = buildExportData(expensesToExport)
     downloadBlob(new Blob([`\ufeff${csv}`], { type: 'text/csv;charset=utf-8' }), `记账-${safeFileName(label)}-${todayISO()}.csv`)
-  }
-
-  function exportVisibleCsv() {
-    downloadCsv(filteredExpenses, '当前筛选')
   }
 
   function exportCsv(tripId = exportTripId) {

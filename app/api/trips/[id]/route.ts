@@ -30,11 +30,20 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
   }
 }
 
-export async function DELETE(_req: NextRequest, context: { params: Promise<{ id: string }> }) {
+export async function DELETE(req: NextRequest, context: { params: Promise<{ id: string }> }) {
   try {
     const params = await context.params
     const id = Number(params.id)
     if (!Number.isInteger(id)) return NextResponse.json({ message: '无效行程 ID' }, { status: 400 })
+    const hardDelete = req.nextUrl.searchParams.get('hard') === '1'
+    if (hardDelete) {
+      const usageRows = await query('SELECT COUNT(*)::int AS count FROM my_money_expenses WHERE trip_id = $1', [id])
+      const usageCount = usageRows[0]?.count || 0
+      if (usageCount > 0) return NextResponse.json({ message: `行程已被 ${usageCount} 笔账单使用，不能删除` }, { status: 409 })
+      const deleteResult = await execute('DELETE FROM my_money_trips WHERE id = $1 AND status = \'archived\'', [id])
+      if (deleteResult.rowCount === 0) return NextResponse.json({ message: '归档行程不存在' }, { status: 404 })
+      return NextResponse.json({ message: '归档行程已删除' })
+    }
     const result = await execute('UPDATE my_money_trips SET status = \'archived\', updated_at = now() WHERE id = $1', [id])
     if (result.rowCount === 0) return NextResponse.json({ message: '行程不存在' }, { status: 404 })
     return NextResponse.json({ message: '行程已归档' })
