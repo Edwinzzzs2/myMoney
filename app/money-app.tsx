@@ -72,6 +72,7 @@ type HistoryFilter = 'all' | 'invoice' | 'reimbursement' | 'reimbursed'
 type SettingsPanel = 'ledger' | 'categories' | 'trips' | 'archive' | 'payment' | 'invoice' | 'export' | null
 type ZipFile = { name: string; data: Uint8Array }
 type CategoryIconValue = keyof typeof iconMap
+const preferredTripStorageKey = 'myMoney.preferredTripId'
 
 const categoryIconOptions: Array<{ value: CategoryIconValue; label: string }> = [
   { value: 'utensils', label: '餐饮' },
@@ -238,6 +239,7 @@ export function MoneyApp() {
     setError('')
     try {
       const data = await fetchJson<BootstrapData>('/api/bootstrap')
+      const preferredTripId = getPreferredTripId(data.trips)
       setCategories(data.categories)
       setTrips(data.trips)
       setArchivedTrips(data.archivedTrips || [])
@@ -245,7 +247,7 @@ export function MoneyApp() {
       setForm((current) => ({
         ...current,
         category_id: current.category_id || data.categories.find((item) => item.is_active)?.id || '',
-        trip_id: current.trip_id || data.trips[0]?.id || '',
+        trip_id: data.trips.some((trip) => trip.id === current.trip_id) ? current.trip_id : preferredTripId,
       }))
     } catch (e: any) {
       setError(e.message || '加载失败')
@@ -255,11 +257,34 @@ export function MoneyApp() {
   }
 
   function patchForm(patch: Partial<ExpenseFormState>) {
+    if (patch.trip_id !== undefined) rememberPreferredTripId(patch.trip_id)
     setForm((current) => ({ ...current, ...patch }))
   }
 
   function patchSmartDraft(patch: Partial<ExpenseFormState>) {
+    if (patch.trip_id !== undefined) rememberPreferredTripId(patch.trip_id)
     setSmartDraft((current) => (current ? { ...current, ...patch } : current))
+  }
+
+  function getPreferredTripId(nextTrips = trips) {
+    const fallbackTripId = nextTrips[0]?.id || ''
+    try {
+      const storedTripId = window.localStorage.getItem(preferredTripStorageKey) || ''
+      return nextTrips.some((trip) => trip.id === storedTripId) ? storedTripId : fallbackTripId
+    } catch {
+      return fallbackTripId
+    }
+  }
+
+  function rememberPreferredTripId(tripId: string) {
+    if (!tripId) return
+    try {
+      window.localStorage.setItem(preferredTripStorageKey, tripId)
+    } catch {}
+  }
+
+  function resetFormWithPreferredTrip(nextForm: ExpenseFormState) {
+    setForm({ ...nextForm, trip_id: getPreferredTripId(trips) })
   }
 
   function focusManualForm() {
@@ -275,6 +300,7 @@ export function MoneyApp() {
 
   async function saveExpense(event?: FormEvent) {
     event?.preventDefault()
+    const nextTripId = form.trip_id || getPreferredTripId(trips)
     setSaving(true)
     setError('')
     try {
@@ -284,7 +310,7 @@ export function MoneyApp() {
         body: JSON.stringify(formToPayload(form)),
       })
       await loadData()
-      setForm(makeBlankForm(activeCategories[0]?.id || '', trips[0]?.id || ''))
+      setForm(makeBlankForm(activeCategories[0]?.id || '', nextTripId))
       setSmartDraft(null)
       setSmartText('')
       setSmartOpen(false)
@@ -504,7 +530,7 @@ export function MoneyApp() {
       .trim()
 
     return {
-      ...makeBlankForm(categoryId, form.trip_id || trips[0]?.id || ''),
+      ...makeBlankForm(categoryId, form.trip_id || getPreferredTripId(trips)),
       amount: amount > 0 ? String(amount) : '',
       title: title || category?.name || '出差支出',
       expense_date: date,
@@ -560,7 +586,7 @@ export function MoneyApp() {
 
   function normalizeAiDraft(parsed: AiParsedExpense, sourceText = smartText) {
     return {
-      ...makeBlankForm(parsed.category_id || activeCategories[0]?.id || '', parsed.trip_id || form.trip_id || trips[0]?.id || ''),
+      ...makeBlankForm(parsed.category_id || activeCategories[0]?.id || '', parsed.trip_id || form.trip_id || getPreferredTripId(trips)),
       ...parsed,
       amount: parsed.amount === undefined || parsed.amount === null ? '' : String(parsed.amount),
       merchant: parsed.merchant || '',
@@ -589,7 +615,7 @@ export function MoneyApp() {
           now: nowTime(),
           categories: activeCategories.map((category) => ({ id: category.id, name: category.name })),
           trips: trips.map((trip) => ({ id: trip.id, name: trip.name, destination: trip.destination })),
-          default_trip_id: form.trip_id || trips[0]?.id || '',
+          default_trip_id: form.trip_id || getPreferredTripId(trips),
         }),
       })
       setSmartDraft(normalizeAiDraft(parsed, text))
@@ -824,7 +850,7 @@ export function MoneyApp() {
       formId="manual-entry-form"
       onPatchForm={patchForm}
       onSaveExpense={saveExpense}
-      onResetForm={setForm}
+      onResetForm={resetFormWithPreferredTrip}
     />
   )
 
@@ -873,7 +899,7 @@ export function MoneyApp() {
             compact
             onPatchForm={patchForm}
             onSaveExpense={saveExpense}
-            onResetForm={setForm}
+            onResetForm={resetFormWithPreferredTrip}
           />
         </aside>
       </div>
@@ -1462,10 +1488,13 @@ export function MoneyApp() {
                 </Field>
                 <Field label="行程">
                   <select value={smartDraft.trip_id} onChange={(event) => patchSmartDraft({ trip_id: event.target.value })} className="field-input h-10">
-                    <option value="">不归属行程</option>
-                    {trips.map((trip) => (
-                      <option key={trip.id} value={trip.id}>{trip.name}</option>
-                    ))}
+                    {trips.length ? (
+                      trips.map((trip) => (
+                        <option key={trip.id} value={trip.id}>{trip.name}</option>
+                      ))
+                    ) : (
+                      <option value="">暂无行程</option>
+                    )}
                   </select>
                 </Field>
                 <Field label="日期">
