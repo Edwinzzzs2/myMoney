@@ -75,7 +75,7 @@ async function ensureInitialized() {
         '  expense_time TIME,\n' +
         '  payment_method VARCHAR(64) NOT NULL DEFAULT \'个人垫付\',\n' +
         '  invoice_status VARCHAR(32) NOT NULL DEFAULT \'pending\',\n' +
-        '  reimbursement_status VARCHAR(32) NOT NULL DEFAULT \'unsubmitted\',\n' +
+        '  reimbursement_status VARCHAR(32) NOT NULL DEFAULT \'pending\',\n' +
         '  reimbursable BOOLEAN NOT NULL DEFAULT TRUE,\n' +
         '  note TEXT,\n' +
         '  receipt_url TEXT,\n' +

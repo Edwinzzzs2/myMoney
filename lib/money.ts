@@ -61,7 +61,7 @@ export function normalizeExpensePayload(data: ExpensePayload) {
     expenseTime: data.expense_time ? String(data.expense_time).trim() : null,
     paymentMethod: String(data.payment_method || '个人垫付').trim(),
     invoiceStatus: String(data.invoice_status || 'pending').trim(),
-    reimbursementStatus: String(data.reimbursement_status || 'unsubmitted').trim(),
+    reimbursementStatus: String(data.reimbursement_status || 'pending').trim(),
     reimbursable: data.reimbursable !== false,
     note: data.note ? String(data.note).trim() : null,
     receiptUrl: data.receipt_url ? String(data.receipt_url).trim() : null,
@@ -87,9 +87,8 @@ export function buildSummary(expenses: any[]) {
     month: 0,
     today: 0,
     reimbursable: 0,
-    submitted: 0,
+    pendingReimbursement: 0,
     reimbursed: 0,
-    unsubmitted: 0,
   }
 
   for (const expense of expenses) {
@@ -98,9 +97,8 @@ export function buildSummary(expenses: any[]) {
     if (String(expense.expense_date || '').startsWith(monthKey)) totals.month += amount
     if (expense.expense_date === todayKey) totals.today += amount
     if (expense.reimbursable) totals.reimbursable += amount
-    if (expense.reimbursement_status === 'submitted') totals.submitted += amount
+    if (expense.reimbursement_status === 'pending') totals.pendingReimbursement += amount
     if (expense.reimbursement_status === 'reimbursed') totals.reimbursed += amount
-    if (expense.reimbursement_status === 'unsubmitted') totals.unsubmitted += amount
   }
 
   return totals

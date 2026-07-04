@@ -30,14 +30,14 @@ type ParsedExpense = {
   expense_time?: string
   payment_method?: string
   invoice_status?: 'pending' | 'received' | 'none'
-  reimbursement_status?: 'unsubmitted' | 'submitted' | 'reimbursed' | 'rejected'
+  reimbursement_status?: 'pending' | 'reimbursed'
   reimbursable?: boolean
   note?: string
   receipt_url?: string
 }
 
 const allowedInvoiceStatus = new Set(['pending', 'received', 'none'])
-const allowedReimbursementStatus = new Set(['unsubmitted', 'submitted', 'reimbursed', 'rejected'])
+const allowedReimbursementStatus = new Set(['pending', 'reimbursed'])
 
 function getChatCompletionsUrl(baseUrl: string) {
   const trimmed = baseUrl.trim().replace(/\/+$/, '')
@@ -73,7 +73,7 @@ function normalizeParsedExpense(raw: ParsedExpense, request: Required<Pick<Parse
   const categoryId = raw.category_id && categories.some((item) => item.id === String(raw.category_id)) ? String(raw.category_id) : categories[0]?.id || ''
   const tripId = raw.trip_id && trips.some((item) => item.id === String(raw.trip_id)) ? String(raw.trip_id) : request.default_trip_id || trips[0]?.id || ''
   const invoiceStatus = allowedInvoiceStatus.has(String(raw.invoice_status)) ? String(raw.invoice_status) : 'pending'
-  const reimbursementStatus = allowedReimbursementStatus.has(String(raw.reimbursement_status)) ? String(raw.reimbursement_status) : 'unsubmitted'
+  const reimbursementStatus = allowedReimbursementStatus.has(String(raw.reimbursement_status)) ? String(raw.reimbursement_status) : 'pending'
 
   return {
     amount: Number.isFinite(amount) && amount > 0 ? amount : 0,
@@ -117,9 +117,9 @@ export async function POST(req: NextRequest) {
   const systemPrompt =
     '你是出差报销记账助手。把用户口述的中文账单解析为 JSON。只返回 JSON，不要解释。' +
     '金额用数字，日期用 YYYY-MM-DD，时间用 HH:mm。' +
-    'invoice_status 只能是 pending/received/none，reimbursement_status 只能是 unsubmitted/submitted/reimbursed/rejected。' +
+    'invoice_status 只能是 pending/received/none，reimbursement_status 只能是 pending/reimbursed。' +
     '如果用户提到已开票/有发票/发票到了，用 received；无票/没有发票用 none；否则 pending。' +
-    '默认 payment_method 是 个人垫付，默认 reimbursement_status 是 unsubmitted，默认 reimbursable 是 true。' +
+    '如果用户提到已报销，用 reimbursed；否则 reimbursement_status 默认 pending。默认 payment_method 是 个人垫付，默认 reimbursable 是 true。' +
     'category_id 必须从给定分类中选择，trip_id 必须从给定行程中选择；不确定则用默认或第一个。'
 
   const userPrompt = JSON.stringify({
@@ -139,7 +139,7 @@ export async function POST(req: NextRequest) {
       expense_time: 'HH:mm',
       payment_method: 'string',
       invoice_status: 'pending | received | none',
-      reimbursement_status: 'unsubmitted | submitted | reimbursed | rejected',
+      reimbursement_status: 'pending | reimbursed',
       reimbursable: 'boolean',
       note: 'string',
       receipt_url: 'string',

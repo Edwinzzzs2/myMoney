@@ -24,7 +24,6 @@ DB_PASSWORD=******
 AI_BASE_URL=https://api.openai.com/v1
 AI_API_KEY=******
 AI_MODEL=gpt-4o-mini
-AI_TRANSCRIBE_MODEL=whisper-1
 ```
 
 首次访问 API 时会自动创建：
@@ -42,9 +41,8 @@ AI 接口使用 OpenAI 兼容的 `chat/completions` 协议：
 - `AI_BASE_URL`: API 地址，例如 `https://api.openai.com/v1` 或你的中转地址。
 - `AI_API_KEY`: API Key。
 - `AI_MODEL`: 解析模型，默认示例为 `gpt-4o-mini`。
-- `AI_TRANSCRIBE_MODEL`: 语音转文字模型，默认示例为 `whisper-1`。
 
-Safari 会优先尝试浏览器自带的 `webkitSpeechRecognition`。如果手机浏览器不返回识别文字，会录音并上传到 `/api/ai/transcribe` 转写，再继续调用 `/api/ai/parse-expense` 解析账单字段。iPhone Safari 使用麦克风需要 HTTPS 或 localhost，并且要允许站点麦克风权限。如果 AI 未配置或调用失败，前端会用本地规则兜底解析，不影响手动记账。
+语音输入只使用浏览器自带的 `SpeechRecognition` / `webkitSpeechRecognition` 做实时识别，不再上传录音做 AI 转写。浏览器不支持或识别失败时，可以直接在识别结果框里手动输入或修改文字，再调用 `/api/ai/parse-expense` 解析账单字段。如果 AI 未配置或调用失败，前端会用本地规则兜底解析，不影响手动记账。
 
 ## 开发
 
