@@ -47,9 +47,9 @@ export type Expense = {
   payment_method: string
   invoice_status: string
   reimbursement_status: string
-  reimbursable: boolean
   note: string | null
   receipt_url: string | null
+  screenshot_url: string | null
   category_name: string | null
   category_icon: string | null
   category_color: string | null
@@ -78,9 +78,9 @@ export type ExpenseFormState = {
   payment_method: string
   invoice_status: string
   reimbursement_status: string
-  reimbursable: boolean
   note: string
   receipt_url: string
+  screenshot_url: string
 }
 
 export type AiParsedExpense = Omit<Partial<ExpenseFormState>, 'amount'> & {
@@ -108,7 +108,6 @@ export type Totals = {
   total: number
   month: number
   today: number
-  reimbursable: number
   pendingReimbursement: number
   reimbursed: number
   countToday: number

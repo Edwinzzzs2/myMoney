@@ -68,9 +68,9 @@ export function makeBlankForm(categoryId = '', tripId = ''): ExpenseFormState {
     payment_method: '个人垫付',
     invoice_status: 'pending',
     reimbursement_status: 'pending',
-    reimbursable: true,
     note: '',
     receipt_url: '',
+    screenshot_url: '',
   }
 }
 
@@ -130,9 +130,9 @@ export function expenseToPayload(expense: Expense) {
     payment_method: expense.payment_method,
     invoice_status: expense.invoice_status,
     reimbursement_status: expense.reimbursement_status,
-    reimbursable: expense.reimbursable,
     note: expense.note || '',
     receipt_url: expense.receipt_url || '',
+    screenshot_url: expense.screenshot_url || '',
   }
 }
 
@@ -148,9 +148,9 @@ export function formToPayload(form: ExpenseFormState) {
     payment_method: form.payment_method,
     invoice_status: form.invoice_status,
     reimbursement_status: form.reimbursement_status,
-    reimbursable: form.reimbursable,
     note: form.note.trim(),
     receipt_url: form.receipt_url.trim(),
+    screenshot_url: form.screenshot_url.trim(),
   }
 }
 

@@ -11,9 +11,9 @@ export type ExpensePayload = {
   payment_method?: string
   invoice_status?: string
   reimbursement_status?: string
-  reimbursable?: boolean
   note?: string | null
   receipt_url?: string | null
+  screenshot_url?: string | null
 }
 
 export const categorySelect =
@@ -31,7 +31,7 @@ export const invoiceStatusSelect =
 export const expenseSelect =
   'SELECT e.id::text, e.trip_id::text, e.category_id::text, e.amount::float AS amount, e.currency, e.title, e.merchant, ' +
   'to_char(e.expense_date, \'YYYY-MM-DD\') AS expense_date, to_char(e.expense_time, \'HH24:MI\') AS expense_time, ' +
-  'e.payment_method, e.invoice_status, e.reimbursement_status, e.reimbursable, e.note, e.receipt_url, e.created_at, e.updated_at, ' +
+  'e.payment_method, e.invoice_status, e.reimbursement_status, e.note, e.receipt_url, e.screenshot_url, e.created_at, e.updated_at, ' +
   'c.name AS category_name, c.icon AS category_icon, c.color AS category_color, t.name AS trip_name, t.destination ' +
   'FROM my_money_expenses e ' +
   'LEFT JOIN my_money_categories c ON c.id = e.category_id ' +
@@ -68,9 +68,9 @@ export function normalizeExpensePayload(data: ExpensePayload) {
     paymentMethod: String(data.payment_method || '个人垫付').trim(),
     invoiceStatus: String(data.invoice_status || 'pending').trim(),
     reimbursementStatus: String(data.reimbursement_status || 'pending').trim(),
-    reimbursable: data.reimbursable !== false,
     note: data.note ? String(data.note).trim() : null,
     receiptUrl: data.receipt_url ? String(data.receipt_url).trim() : null,
+    screenshotUrl: data.screenshot_url ? String(data.screenshot_url).trim() : null,
   }
 }
 
@@ -95,7 +95,6 @@ export function buildSummary(expenses: any[]) {
     total: 0,
     month: 0,
     today: 0,
-    reimbursable: 0,
     pendingReimbursement: 0,
     reimbursed: 0,
   }
@@ -105,7 +104,6 @@ export function buildSummary(expenses: any[]) {
     totals.total += amount
     if (String(expense.expense_date || '').startsWith(monthKey)) totals.month += amount
     if (expense.expense_date === todayKey) totals.today += amount
-    if (expense.reimbursable) totals.reimbursable += amount
     if (expense.reimbursement_status === 'pending') totals.pendingReimbursement += amount
     if (expense.reimbursement_status === 'reimbursed') totals.reimbursed += amount
   }

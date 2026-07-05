@@ -51,7 +51,7 @@ export function DesktopNav({ activeTab, setActiveTab, totals }: DesktopNavProps)
         <p className="mt-2 text-2xl font-semibold tracking-normal text-black dark:text-white">{formatMoney(totals.month)}</p>
         <div className="mt-4 grid grid-cols-2 gap-2 text-xs">
           <div className="rounded-md bg-amber-50 p-2 text-amber-700 dark:bg-amber-300/10 dark:text-amber-100">
-            <p className="opacity-70">待报销</p>
+            <p className="opacity-70">待报销(累计)</p>
             <p className="mt-1 font-bold">{formatMoney(totals.pendingReimbursement)}</p>
           </div>
           <div className="rounded-md bg-emerald-50 p-2 text-emerald-700 dark:bg-emerald-400/10 dark:text-emerald-100">

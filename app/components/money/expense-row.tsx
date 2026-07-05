@@ -1,7 +1,8 @@
-import { Pencil, Trash2 } from 'lucide-react'
+import { Eye, Pencil, Trash2 } from 'lucide-react'
 
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { Dialog, DialogContent, DialogTrigger } from '@/components/ui/dialog'
 import { cn } from '@/lib/utils'
 
 import type { Expense } from './types'
@@ -120,6 +121,32 @@ export function ExpenseRow({
               <Badge variant="secondary" className="border-0 bg-slate-100 font-normal text-slate-600 dark:bg-white/10 dark:text-slate-300">
                 {expense.payment_method}
               </Badge>
+              {expense.receipt_url ? (
+                <Dialog>
+                  <DialogTrigger asChild>
+                    <Button type="button" variant="outline" size="sm" className="h-7 text-xs flex items-center gap-1 border-slate-200 bg-white/70 dark:border-white/10 dark:bg-white/[0.04] text-slate-700 dark:text-slate-200" onClick={(e) => e.stopPropagation()}>
+                      <Eye className="h-3 w-3" />
+                      发票
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent className="max-w-3xl max-h-[85vh] overflow-auto p-4 flex items-center justify-center border-slate-200 dark:border-white/10 bg-white dark:bg-[#101625]" onClick={(e) => e.stopPropagation()}>
+                    <img src={expense.receipt_url} alt="发票图片" className="max-w-full max-h-[75vh] object-contain rounded" />
+                  </DialogContent>
+                </Dialog>
+              ) : null}
+              {expense.screenshot_url ? (
+                <Dialog>
+                  <DialogTrigger asChild>
+                    <Button type="button" variant="outline" size="sm" className="h-7 text-xs flex items-center gap-1 border-slate-200 bg-white/70 dark:border-white/10 dark:bg-white/[0.04] text-slate-700 dark:text-slate-200" onClick={(e) => e.stopPropagation()}>
+                      <Eye className="h-3 w-3" />
+                      截图
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent className="max-w-3xl max-h-[85vh] overflow-auto p-4 flex items-center justify-center border-slate-200 dark:border-white/10 bg-white dark:bg-[#101625]" onClick={(e) => e.stopPropagation()}>
+                    <img src={expense.screenshot_url} alt="消费截图" className="max-w-full max-h-[75vh] object-contain rounded" />
+                  </DialogContent>
+                </Dialog>
+              ) : null}
               <Button
                 type="button"
                 variant="ghost"

@@ -16,7 +16,7 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
     }
     const payload = normalizeExpensePayload(await req.json())
     const result = await execute(
-      'UPDATE my_money_expenses SET trip_id = $1, category_id = $2, amount = $3, title = $4, merchant = $5, expense_date = $6, expense_time = NULLIF($7, \'\')::time, payment_method = $8, invoice_status = $9, reimbursement_status = $10, reimbursable = $11, note = $12, receipt_url = $13, updated_at = now() WHERE id = $14 AND user_id = $15',
+      'UPDATE my_money_expenses SET trip_id = $1, category_id = $2, amount = $3, title = $4, merchant = $5, expense_date = $6, expense_time = NULLIF($7, \'\')::time, payment_method = $8, invoice_status = $9, reimbursement_status = $10, note = $11, receipt_url = $12, screenshot_url = $13, updated_at = now() WHERE id = $14 AND user_id = $15',
       [
         payload.tripId,
         payload.categoryId,
@@ -28,9 +28,9 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
         payload.paymentMethod,
         payload.invoiceStatus,
         payload.reimbursementStatus,
-        payload.reimbursable,
         payload.note,
         payload.receiptUrl,
+        payload.screenshotUrl,
         id,
         user.userId,
       ]

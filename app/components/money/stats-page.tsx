@@ -1,19 +1,20 @@
 "use client"
 
 import { useMemo, useState } from 'react'
-import { BarChart3, ChevronDown, ChevronRight, MapPin, TrendingUp } from 'lucide-react'
+import { BarChart3, ChevronLeft, ChevronRight, MapPin, TrendingUp } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { cn } from '@/lib/utils'
 
 import { EmptyState } from './empty-state'
-import type { StatsData, Totals } from './types'
-import { formatMoney, formatMoneyCompact, getCategoryIcon } from './money-utils'
+import type { Category, Expense, Trip } from './types'
+import { formatMoney, formatMoneyCompact, getCategoryIcon, todayISO } from './money-utils'
 
 type StatsPageProps = {
-  totals: Totals
-  stats: StatsData
+  expenses: Expense[]
+  activeCategories: Category[]
+  trips: Trip[]
 }
 
 type StatsMode = 'category' | 'trip' | 'trend'
@@ -24,14 +25,117 @@ const modes: Array<{ key: StatsMode; label: string }> = [
   { key: 'trend', label: '趋势' },
 ]
 
-export function StatsPage({ totals, stats }: StatsPageProps) {
+/** 返回 YYYY-MM 格式的月份字符串 */
+function toMonthKey(date: Date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
+}
+
+/** 将 YYYY-MM 解析为 Date（当月1日） */
+function parseMonthKey(key: string) {
+  const [y, m] = key.split('-').map(Number)
+  return new Date(y, m - 1, 1)
+}
+
+/** 格式化月份为中文显示 */
+function formatMonthLabel(key: string) {
+  const d = parseMonthKey(key)
+  return d.toLocaleDateString('zh-CN', { year: 'numeric', month: 'long' })
+}
+
+export function StatsPage({ expenses, activeCategories, trips }: StatsPageProps) {
+  const currentMonthKey = toMonthKey(new Date())
+  const [selectedMonth, setSelectedMonth] = useState(currentMonthKey)
   const [mode, setMode] = useState<StatsMode>('category')
-  const categories = stats.categoryTotals.slice(0, 5)
+
+  // 是否已经是当前月（不能往后翻）
+  const isCurrentMonth = selectedMonth >= currentMonthKey
+
+  // 获取已有记录的所有月份（用于判断能否往前翻）
+  const availableMonths = useMemo(() => {
+    const months = new Set<string>()
+    for (const e of expenses) {
+      if (e.expense_date) months.add(e.expense_date.slice(0, 7))
+    }
+    return months
+  }, [expenses])
+
+  // 切换月份
+  function prevMonth() {
+    const d = parseMonthKey(selectedMonth)
+    d.setMonth(d.getMonth() - 1)
+    setSelectedMonth(toMonthKey(d))
+  }
+  function nextMonth() {
+    if (isCurrentMonth) return
+    const d = parseMonthKey(selectedMonth)
+    d.setMonth(d.getMonth() + 1)
+    setSelectedMonth(toMonthKey(d))
+  }
+  // 按所选月份过滤账单
+  const monthExpenses = useMemo(
+    () => expenses.filter((e) => e.expense_date?.startsWith(selectedMonth)),
+    [expenses, selectedMonth]
+  )
+
+  // 月度汇总
+  const totals = useMemo(() => {
+    let month = 0, pendingReimbursement = 0, reimbursed = 0
+    for (const e of monthExpenses) {
+      const amount = Number(e.amount || 0)
+      month += amount
+      if (e.reimbursement_status === 'pending') pendingReimbursement += amount
+      if (e.reimbursement_status === 'reimbursed') reimbursed += amount
+    }
+    return { month, pendingReimbursement, reimbursed }
+  }, [monthExpenses])
+
+  // 分类统计
+  const categoryTotals = useMemo(() =>
+    activeCategories
+      .map((category) => ({
+        category,
+        amount: monthExpenses
+          .filter((e) => e.category_id === category.id)
+          .reduce((sum, e) => sum + Number(e.amount || 0), 0),
+      }))
+      .filter((item) => item.amount > 0)
+      .sort((a, b) => b.amount - a.amount),
+    [activeCategories, monthExpenses]
+  )
+
+  // 周趋势（当月1-5周）
+  const weekly = useMemo(() => {
+    const arr = [0, 0, 0, 0, 0]
+    for (const e of monthExpenses) {
+      const day = Number(e.expense_date.slice(-2))
+      const index = Math.min(4, Math.max(0, Math.ceil(day / 7) - 1))
+      arr[index] += Number(e.amount || 0)
+    }
+    return arr
+  }, [monthExpenses])
+
+  const maxWeek = Math.max(1, ...weekly)
+
+  // 行程统计
+  const tripTotals = useMemo(() =>
+    trips
+      .map((trip) => ({
+        trip,
+        amount: monthExpenses
+          .filter((e) => e.trip_id === trip.id)
+          .reduce((sum, e) => sum + Number(e.amount || 0), 0),
+      }))
+      .filter((item) => item.amount > 0)
+      .sort((a, b) => b.amount - a.amount),
+    [trips, monthExpenses]
+  )
+
+  // 圆环图数据
   const total = Math.max(1, totals.month)
-  const monthLabel = new Date().toLocaleDateString('zh-CN', { year: 'numeric', month: 'long' })
+  const topCategories = categoryTotals.slice(0, 5)
   const donut = useMemo(() => {
     let cursor = 0
-    const conic = categories
+    const conic = topCategories
       .map(({ category, amount }) => {
         const start = cursor
         const span = (amount / total) * 100
@@ -40,26 +144,54 @@ export function StatsPage({ totals, stats }: StatsPageProps) {
       })
       .join(', ')
     return { conic, cursor }
-  }, [categories, total])
+  }, [topCategories, total])
 
   return (
     <div className="mx-auto max-w-[430px] space-y-3.5 lg:max-w-5xl">
+      {/* 标题 + 月份选择器 */}
       <div className="flex items-center justify-between gap-3">
         <h2 className="text-2xl font-semibold tracking-normal text-slate-950 dark:text-white">统计</h2>
-        <Button type="button" variant="outline" className="h-9 rounded-md bg-white/80 px-3 text-sm dark:border-white/10 dark:bg-white/[0.06]">
-          {monthLabel}
-          <ChevronDown className="h-4 w-4" />
-        </Button>
+        <div className="flex items-center gap-1">
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="h-9 w-9 rounded-md text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-white/10"
+            onClick={prevMonth}
+            aria-label="上个月"
+          >
+            <ChevronLeft className="h-4 w-4" />
+          </Button>
+          <span className="flex h-9 min-w-[9rem] items-center justify-center rounded-md border border-slate-200/80 bg-white/80 px-3 text-sm font-medium text-slate-700 dark:border-white/10 dark:bg-white/[0.06] dark:text-slate-200">
+            {formatMonthLabel(selectedMonth)}
+          </span>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className={cn(
+              'h-9 w-9 rounded-md text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-white/10',
+              isCurrentMonth && 'cursor-not-allowed opacity-30'
+            )}
+            onClick={nextMonth}
+            disabled={isCurrentMonth}
+            aria-label="下个月"
+          >
+            <ChevronRight className="h-4 w-4" />
+          </Button>
+        </div>
       </div>
 
+      {/* 月度汇总卡片 */}
       <Card className="overflow-hidden rounded-lg border-slate-200/80 bg-white/80 shadow-[0_10px_28px_rgba(15,23,42,0.07)] backdrop-blur dark:border-white/10 dark:bg-white/[0.055] dark:shadow-none">
         <div className="grid grid-cols-3 divide-x divide-slate-200/70 dark:divide-white/10">
-          <Metric label="本月支出" value={formatMoneyCompact(totals.month, 2)} tone="text-slate-950 dark:text-white" />
+          <Metric label="当月支出" value={formatMoneyCompact(totals.month, 2)} tone="text-slate-950 dark:text-white" />
           <Metric label="待报销" value={formatMoneyCompact(totals.pendingReimbursement, 2)} tone="text-orange-500 dark:text-orange-400" />
           <Metric label="已报销" value={formatMoneyCompact(totals.reimbursed, 2)} tone="text-emerald-600 dark:text-emerald-300" />
         </div>
       </Card>
 
+      {/* 模式切换 */}
       <div className="grid grid-cols-3 overflow-hidden rounded-lg border border-slate-200/80 bg-white/70 p-1 shadow-sm dark:border-white/10 dark:bg-white/[0.045]">
         {modes.map((item) => (
           <Button
@@ -77,10 +209,14 @@ export function StatsPage({ totals, stats }: StatsPageProps) {
         ))}
       </div>
 
-      {mode === 'category' ? <CategoryStats categories={categories} total={total} monthTotal={totals.month} conic={donut.conic} cursor={donut.cursor} /> : null}
-      {mode === 'trip' ? <TripStats stats={stats} /> : null}
-      {mode === 'trend' ? <TrendStats stats={stats} /> : null}
+      {/* 内容区 */}
+      {mode === 'category' ? (
+        <CategoryStats categories={topCategories} total={total} monthTotal={totals.month} conic={donut.conic} cursor={donut.cursor} />
+      ) : null}
+      {mode === 'trip' ? <TripStats tripTotals={tripTotals} /> : null}
+      {mode === 'trend' ? <TrendStats weekly={weekly} maxWeek={maxWeek} /> : null}
 
+      {/* 报销进度 */}
       <Card className="rounded-lg border-slate-200/80 bg-white/80 p-4 shadow-[0_10px_24px_rgba(15,23,42,0.06)] backdrop-blur dark:border-white/10 dark:bg-white/[0.045] dark:shadow-none">
         <div className="flex items-center justify-between gap-3 text-sm">
           <h3 className="font-semibold text-slate-950 dark:text-white">报销进度</h3>
@@ -90,15 +226,19 @@ export function StatsPage({ totals, stats }: StatsPageProps) {
         </div>
         <div className="mt-3 h-4 overflow-hidden rounded-full bg-slate-100 dark:bg-white/10">
           <div
-            className="h-full rounded-full bg-[repeating-linear-gradient(45deg,rgba(255,255,255,0.18)_0_8px,transparent_8px_16px),linear-gradient(90deg,#2ea86f,#63c98e)]"
+            className="h-full rounded-full bg-[repeating-linear-gradient(45deg,rgba(255,255,255,0.18)_0_8px,transparent_8px_16px),linear-gradient(90deg,#2ea86f,#63c98e)] transition-all duration-500"
             style={{ width: `${totals.month ? Math.min(100, (totals.reimbursed / totals.month) * 100) : 0}%` }}
           />
         </div>
-        <p className="mt-2 text-right text-sm text-slate-600 dark:text-slate-300">{totals.month ? ((totals.reimbursed / totals.month) * 100).toFixed(1) : '0.0'}%</p>
+        <p className="mt-2 text-right text-sm text-slate-600 dark:text-slate-300">
+          {totals.month ? ((totals.reimbursed / totals.month) * 100).toFixed(1) : '0.0'}%
+        </p>
       </Card>
     </div>
   )
 }
+
+// ─── 子组件 ────────────────────────────────────────────────────────────────────
 
 function CategoryStats({
   categories,
@@ -107,7 +247,7 @@ function CategoryStats({
   conic,
   cursor,
 }: {
-  categories: StatsData['categoryTotals']
+  categories: Array<{ category: Category; amount: number }>
   total: number
   monthTotal: number
   conic: string
@@ -158,7 +298,7 @@ function CategoryStats({
                     <div className="min-w-0">
                       <p className="truncate font-semibold">{category.name}</p>
                       <div className="mt-1 h-1.5 rounded-full bg-slate-100 dark:bg-white/10">
-                        <div className="h-1.5 rounded-full" style={{ width: `${Math.max(6, percent)}%`, backgroundColor: category.color }} />
+                        <div className="h-1.5 rounded-full transition-all duration-500" style={{ width: `${Math.max(6, percent)}%`, backgroundColor: category.color }} />
                       </div>
                     </div>
                   </div>
@@ -177,15 +317,14 @@ function CategoryStats({
   )
 }
 
-function TripStats({ stats }: { stats: StatsData }) {
-  const maxTrip = Math.max(1, ...stats.tripTotals.map((item) => item.amount))
-
+function TripStats({ tripTotals }: { tripTotals: Array<{ trip: Trip; amount: number }> }) {
+  const maxTrip = Math.max(1, ...tripTotals.map((item) => item.amount))
   return (
     <Card className="rounded-lg border-slate-200/80 bg-white/80 p-4 shadow-[0_10px_28px_rgba(15,23,42,0.06)] backdrop-blur dark:border-white/10 dark:bg-white/[0.045] dark:shadow-none">
       <h3 className="font-semibold text-slate-950 dark:text-white">行程支出</h3>
-      {stats.tripTotals.length ? (
+      {tripTotals.length ? (
         <div className="mt-4 space-y-3">
-          {stats.tripTotals.map(({ trip, amount }) => {
+          {tripTotals.map(({ trip, amount }) => {
             const budget = Number(trip.budget || 0)
             const percent = budget > 0 ? Math.min(100, (amount / budget) * 100) : (amount / maxTrip) * 100
             return (
@@ -201,7 +340,7 @@ function TripStats({ stats }: { stats: StatsData }) {
                   </div>
                 </div>
                 <div className="mt-3 h-2 overflow-hidden rounded-full bg-slate-100 dark:bg-white/10">
-                  <div className="h-full rounded-full bg-emerald-500 dark:bg-emerald-300" style={{ width: `${Math.max(6, percent)}%` }} />
+                  <div className="h-full rounded-full bg-emerald-500 transition-all duration-500 dark:bg-emerald-300" style={{ width: `${Math.max(6, percent)}%` }} />
                 </div>
               </div>
             )
@@ -214,19 +353,19 @@ function TripStats({ stats }: { stats: StatsData }) {
   )
 }
 
-function TrendStats({ stats }: { stats: StatsData }) {
+function TrendStats({ weekly, maxWeek }: { weekly: number[]; maxWeek: number }) {
   return (
     <Card className="rounded-lg border-slate-200/80 bg-white/80 p-4 shadow-[0_10px_28px_rgba(15,23,42,0.06)] backdrop-blur dark:border-white/10 dark:bg-white/[0.045] dark:shadow-none">
       <h3 className="font-semibold text-slate-950 dark:text-white">本月趋势</h3>
-      {stats.weekly.some((amount) => amount > 0) ? (
+      {weekly.some((amount) => amount > 0) ? (
         <div className="mt-4 grid h-52 grid-cols-5 items-end gap-2 rounded-lg border border-slate-200/80 bg-white/60 px-3 pb-3 pt-4 dark:border-white/10 dark:bg-black/15">
-          {stats.weekly.map((amount, index) => {
-            const percent = stats.maxWeek ? (amount / stats.maxWeek) * 100 : 0
+          {weekly.map((amount, index) => {
+            const percent = maxWeek ? (amount / maxWeek) * 100 : 0
             return (
               <div key={index} className="flex h-full min-w-0 flex-col items-center justify-end gap-2">
                 <span className="text-[0.68rem] font-medium text-slate-500 dark:text-slate-400">{formatMoneyCompact(amount)}</span>
                 <div className="flex h-32 w-full max-w-10 items-end rounded-full bg-slate-100 dark:bg-white/10">
-                  <div className="w-full rounded-full bg-gradient-to-t from-emerald-600 to-emerald-300" style={{ height: `${Math.max(5, percent)}%` }} />
+                  <div className="w-full rounded-full bg-gradient-to-t from-emerald-600 to-emerald-300 transition-all duration-500" style={{ height: `${Math.max(5, percent)}%` }} />
                 </div>
                 <span className="text-[0.68rem] text-slate-500 dark:text-slate-400">第{index + 1}周</span>
               </div>

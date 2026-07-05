@@ -104,8 +104,8 @@ function SummaryStrip({ totals }: { totals: Totals }) {
     <Card className="overflow-hidden rounded-lg border-slate-200/80 bg-white/80 shadow-[0_10px_28px_rgba(15,23,42,0.07)] backdrop-blur dark:border-white/10 dark:bg-white/[0.055] dark:shadow-none">
       <div className="grid grid-cols-3 divide-x divide-slate-200/70 dark:divide-white/10">
         <Metric label="今日支出" value={formatMoneyCompact(totals.today, 2)} tone="text-red-500 dark:text-red-400" />
-        <Metric label="待报销" value={formatMoneyCompact(totals.pendingReimbursement, 2)} tone="text-orange-500 dark:text-orange-400" />
-        <Metric label="本月" value={formatMoneyCompact(totals.month, 2)} tone="text-slate-950 dark:text-white" />
+        <Metric label="本月支出" value={formatMoneyCompact(totals.month, 2)} tone="text-slate-950 dark:text-white" />
+        <Metric label="待报销(累计)" value={formatMoneyCompact(totals.pendingReimbursement, 2)} tone="text-orange-500 dark:text-orange-400" />
       </div>
     </Card>
   )

@@ -23,7 +23,7 @@ export async function POST(req: NextRequest) {
 
     const payload = normalizeExpensePayload(await req.json())
     const result = await execute(
-      'INSERT INTO my_money_expenses (user_id, trip_id, category_id, amount, title, merchant, expense_date, expense_time, payment_method, invoice_status, reimbursement_status, reimbursable, note, receipt_url) ' +
+      'INSERT INTO my_money_expenses (user_id, trip_id, category_id, amount, title, merchant, expense_date, expense_time, payment_method, invoice_status, reimbursement_status, note, receipt_url, screenshot_url) ' +
         'VALUES ($1, $2, $3, $4, $5, $6, $7, NULLIF($8, \'\')::time, $9, $10, $11, $12, $13, $14) RETURNING id',
       [
         user.userId,
@@ -37,9 +37,9 @@ export async function POST(req: NextRequest) {
         payload.paymentMethod,
         payload.invoiceStatus,
         payload.reimbursementStatus,
-        payload.reimbursable,
         payload.note,
         payload.receiptUrl,
+        payload.screenshotUrl,
       ]
     )
     const rows = await query(`${expenseSelect} WHERE e.id = $1 AND e.user_id = $2`, [result.rows[0]?.id, user.userId])

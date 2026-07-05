@@ -1,11 +1,12 @@
 import type { ChangeEvent, FormEvent, ReactNode } from 'react'
-import { Briefcase, CheckSquare, CreditCard, FileText, Loader2, MapPin, Plus, Receipt, Tag, Trash2, Upload, X } from 'lucide-react'
+import { Briefcase, CheckSquare, CreditCard, Eye, FileText, Loader2, MapPin, Plus, Receipt, Tag, Trash2, Upload, X } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
+import { Dialog, DialogContent, DialogTrigger } from '@/components/ui/dialog'
 import { cn } from '@/lib/utils'
 
 import type { Category, ExpenseFormState, InvoiceStatus, PaymentMethod, Trip } from './types'
@@ -41,6 +42,7 @@ export function ManualForm({
   const selectedCategory = activeCategories.find((category) => category.id === form.category_id)
   const CategoryIcon = getCategoryIcon(selectedCategory?.icon)
   const hasReceiptFile = form.receipt_url.startsWith('data:')
+  const hasScreenshotFile = form.screenshot_url.startsWith('data:')
   const hasCurrentPaymentMethod = paymentMethods.some((method) => method.name === form.payment_method)
   const hasCurrentInvoiceStatus = invoiceStatuses.some((status) => status.value === form.invoice_status)
   const receivedInvoiceStatus = invoiceStatuses.find((status) => status.value === 'received')?.value || form.invoice_status
@@ -49,7 +51,7 @@ export function ManualForm({
     const file = event.target.files?.[0]
     if (!file) return
     if (file.size > 10 * 1024 * 1024) {
-      window.alert('文件太大了，建议上传 10MB 以内的发票图片或 PDF。')
+      window.alert('文件太大了，建议上传 10MB 以内的图片。')
       event.target.value = ''
       return
     }
@@ -57,6 +59,23 @@ export function ManualForm({
     reader.onload = () => {
       const receiptUrl = typeof reader.result === 'string' ? reader.result : ''
       if (receiptUrl) onPatchForm({ receipt_url: receiptUrl, invoice_status: receivedInvoiceStatus })
+    }
+    reader.readAsDataURL(file)
+    event.target.value = ''
+  }
+
+  function handleScreenshotFile(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0]
+    if (!file) return
+    if (file.size > 10 * 1024 * 1024) {
+      window.alert('文件太大了，建议上传 10MB 以内的图片。')
+      event.target.value = ''
+      return
+    }
+    const reader = new FileReader()
+    reader.onload = () => {
+      const screenshotUrl = typeof reader.result === 'string' ? reader.result : ''
+      if (screenshotUrl) onPatchForm({ screenshot_url: screenshotUrl })
     }
     reader.readAsDataURL(file)
     event.target.value = ''
@@ -162,53 +181,113 @@ export function ManualForm({
           </select>
         </FieldRow>
 
-        <div className="flex items-center justify-between rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5 dark:border-white/10 dark:bg-black/20">
-          <span className="flex min-w-0 items-center gap-2 text-sm font-medium text-slate-700 dark:text-slate-100">
-            <CheckSquare className="h-4 w-4 text-emerald-600 dark:text-emerald-300" />
-            计入报销
-          </span>
-          <Switch checked={form.reimbursable} onCheckedChange={(checked) => onPatchForm({ reimbursable: checked })} aria-label="计入报销" />
-        </div>
-
         <details className="group rounded-md border border-slate-200 bg-slate-50 dark:border-white/10 dark:bg-black/20">
           <summary className="flex h-10 cursor-pointer list-none items-center gap-2 px-3 text-sm font-medium text-slate-500 [&::-webkit-details-marker]:hidden dark:text-slate-400">
             <Briefcase className="h-4 w-4" />
             更多信息
             <span className="ml-auto truncate text-xs">{form.expense_date} · {form.expense_time}</span>
           </summary>
-          <div className="grid gap-2 border-t border-slate-200 p-3 dark:border-white/10">
-            <Input type="date" value={form.expense_date} onChange={(event) => onPatchForm({ expense_date: event.target.value })} />
-            <Input type="time" value={form.expense_time} onChange={(event) => onPatchForm({ expense_time: event.target.value })} />
-            <Input value={form.merchant} onChange={(event) => onPatchForm({ merchant: event.target.value })} placeholder="商户（可选）" />
-            <div className="rounded-md border border-slate-200 bg-white p-2.5 dark:border-white/10 dark:bg-white/[0.04]">
-              <div className="flex items-center justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="text-sm font-medium text-slate-700 dark:text-slate-100">发票/票据</p>
-                  <p className="mt-0.5 truncate text-xs text-slate-500 dark:text-slate-400">
-                    {form.receipt_url ? (hasReceiptFile ? '已上传文件，导出 ZIP 会带上' : '已填写票据链接') : '支持图片或 PDF，单个 10MB 内'}
-                  </p>
+          <div className="grid gap-3.5 border-t border-slate-200 p-3.5 dark:border-white/10">
+            
+            {/* 支出日期与时间合并 */}
+            <FieldRow label="时间">
+              <Input
+                type="datetime-local"
+                value={`${form.expense_date}T${form.expense_time ? form.expense_time.slice(0, 5) : '00:00'}`}
+                onChange={(event) => {
+                  const val = event.target.value
+                  if (val) {
+                    const [date, time] = val.split('T')
+                    onPatchForm({ expense_date: date, expense_time: time })
+                  }
+                }}
+                className="h-9 text-xs"
+              />
+            </FieldRow>
+
+            {/* 商户名称 */}
+            <FieldRow label="商户">
+              <Input value={form.merchant} onChange={(event) => onPatchForm({ merchant: event.target.value })} placeholder="滴滴出行 / 全家便利店" className="h-9 text-xs" />
+            </FieldRow>
+
+            {/* 上传图片卡片组 */}
+            <FieldRow label="图片" className="items-start pt-1">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                {/* 发票图片上传 */}
+                <div className="flex flex-col justify-between rounded-lg border border-slate-200 bg-white p-3 shadow-sm dark:border-white/10 dark:bg-white/[0.03]">
+                  <div>
+                    <p className="text-xs font-bold text-slate-800 dark:text-slate-200">发票</p>
+                    <p className="mt-1 text-[0.62rem] text-slate-400 dark:text-slate-500 leading-normal truncate">
+                      {form.receipt_url ? '已准备就绪' : '限图片格式，最大 10MB'}
+                    </p>
+                  </div>
+                  <div className="mt-3 flex items-center justify-between gap-1">
+                    {form.receipt_url ? (
+                      <div className="flex gap-1">
+                        <Dialog>
+                          <DialogTrigger asChild>
+                            <Button type="button" variant="ghost" size="sm" className="h-7 w-7 text-slate-500 hover:text-slate-600 p-0" aria-label="查看发票图片">
+                              <Eye className="h-3.5 w-3.5" />
+                            </Button>
+                          </DialogTrigger>
+                          <DialogContent className="max-w-3xl max-h-[85vh] overflow-auto p-4 flex items-center justify-center border-slate-200 dark:border-white/10 bg-white dark:bg-[#101625]">
+                            <img src={form.receipt_url} alt="发票图片" className="max-w-full max-h-[75vh] object-contain rounded" />
+                          </DialogContent>
+                        </Dialog>
+                        <Button type="button" variant="ghost" size="sm" className="h-7 w-7 text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/20 p-0" onClick={() => onPatchForm({ receipt_url: '' })} aria-label="清除发票图片">
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
+                    ) : <div className="w-14" />}
+                    <label className="inline-flex h-7 cursor-pointer items-center gap-1 rounded border border-slate-200 bg-slate-50 px-2.5 text-[0.68rem] font-semibold text-slate-700 hover:bg-slate-100 dark:border-white/10 dark:bg-black/25 dark:text-slate-200 dark:hover:bg-white/[0.05]">
+                      <Upload className="h-3 w-3" />
+                      选择
+                      <input type="file" accept="image/*" className="sr-only" onChange={handleReceiptFile} />
+                    </label>
+                  </div>
                 </div>
-                <div className="flex shrink-0 items-center gap-1.5">
-                  {form.receipt_url ? (
-                    <Button type="button" variant="ghost" size="icon" className="h-8 w-8 text-slate-500" onClick={() => onPatchForm({ receipt_url: '' })} aria-label="清除发票文件">
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  ) : null}
-                  <label className="inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-md border border-slate-200 bg-slate-50 px-2.5 text-xs font-medium text-slate-700 hover:bg-slate-100 dark:border-white/10 dark:bg-black/20 dark:text-slate-100 dark:hover:bg-white/10">
-                    <Upload className="h-3.5 w-3.5" />
-                    上传
-                    <input type="file" accept="image/*,.pdf" className="sr-only" onChange={handleReceiptFile} />
-                  </label>
+
+                {/* 消费截图上传 */}
+                <div className="flex flex-col justify-between rounded-lg border border-slate-200 bg-white p-3 shadow-sm dark:border-white/10 dark:bg-white/[0.03]">
+                  <div>
+                    <p className="text-xs font-bold text-slate-800 dark:text-slate-200">消费截图</p>
+                    <p className="mt-1 text-[0.62rem] text-slate-400 dark:text-slate-500 leading-normal truncate">
+                      {form.screenshot_url ? '已准备就绪' : '限图片格式，最大 10MB'}
+                    </p>
+                  </div>
+                  <div className="mt-3 flex items-center justify-between gap-1">
+                    {form.screenshot_url ? (
+                      <div className="flex gap-1">
+                        <Dialog>
+                          <DialogTrigger asChild>
+                            <Button type="button" variant="ghost" size="sm" className="h-7 w-7 text-slate-500 hover:text-slate-600 p-0" aria-label="查看消费截图">
+                              <Eye className="h-3.5 w-3.5" />
+                            </Button>
+                          </DialogTrigger>
+                          <DialogContent className="max-w-3xl max-h-[85vh] overflow-auto p-4 flex items-center justify-center border-slate-200 dark:border-white/10 bg-white dark:bg-[#101625]">
+                            <img src={form.screenshot_url} alt="消费截图" className="max-w-full max-h-[75vh] object-contain rounded" />
+                          </DialogContent>
+                        </Dialog>
+                        <Button type="button" variant="ghost" size="sm" className="h-7 w-7 text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/20 p-0" onClick={() => onPatchForm({ screenshot_url: '' })} aria-label="清除消费截图">
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
+                    ) : <div className="w-14" />}
+                    <label className="inline-flex h-7 cursor-pointer items-center gap-1 rounded border border-slate-200 bg-slate-50 px-2.5 text-[0.68rem] font-semibold text-slate-700 hover:bg-slate-100 dark:border-white/10 dark:bg-black/25 dark:text-slate-200 dark:hover:bg-white/[0.05]">
+                      <Upload className="h-3 w-3" />
+                      选择
+                      <input type="file" accept="image/*" className="sr-only" onChange={handleScreenshotFile} />
+                    </label>
+                  </div>
                 </div>
               </div>
-              <Input
-                value={hasReceiptFile ? '' : form.receipt_url}
-                onChange={(event) => onPatchForm({ receipt_url: event.target.value })}
-                placeholder="或粘贴发票图片/文件链接"
-                className="mt-2 h-9 border-slate-200 bg-slate-50 text-xs dark:border-white/10 dark:bg-black/20"
-              />
-            </div>
-            <Textarea value={form.note} onChange={(event) => onPatchForm({ note: event.target.value })} placeholder="备注" rows={2} className="min-h-[64px] resize-none" />
+            </FieldRow>
+
+            {/* 备注 */}
+            <FieldRow label="备注" className="items-start pt-1">
+              <Textarea value={form.note} onChange={(event) => onPatchForm({ note: event.target.value })} placeholder="可在此添加支出说明..." rows={2} className="min-h-[58px] resize-none text-xs" />
+            </FieldRow>
+
           </div>
         </details>
 
@@ -224,14 +303,16 @@ export function ManualForm({
   )
 }
 
-function FieldRow({ label, icon, children }: { label: string; icon: ReactNode; children: ReactNode }) {
+function FieldRow({ label, icon, children, className }: { label: string; icon?: ReactNode; children: ReactNode; className?: string }) {
   return (
-    <label className="grid min-w-0 grid-cols-[4.75rem_minmax(0,1fr)] items-center gap-2">
-      <span className="flex items-center gap-2 text-sm font-medium text-slate-500 dark:text-slate-400">
-        <span className="text-slate-400 dark:text-slate-500">{icon}</span>
+    <div className={cn("grid min-w-0 grid-cols-[3.75rem_minmax(0,1fr)] sm:grid-cols-[4.75rem_minmax(0,1fr)] items-center gap-2 sm:gap-3", className)}>
+      <div className="flex items-center gap-1.5 sm:gap-2 text-sm font-medium text-slate-500 dark:text-slate-400">
+        {icon ? <span className="text-slate-400 dark:text-slate-500">{icon}</span> : null}
         {label}
-      </span>
-      {children}
-    </label>
+      </div>
+      <div className="min-w-0">
+        {children}
+      </div>
+    </div>
   )
 }

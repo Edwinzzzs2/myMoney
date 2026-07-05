@@ -121,9 +121,9 @@ async function ensureInitialized() {
         '  payment_method VARCHAR(64) NOT NULL DEFAULT \'个人垫付\',\n' +
         '  invoice_status VARCHAR(32) NOT NULL DEFAULT \'pending\',\n' +
         '  reimbursement_status VARCHAR(32) NOT NULL DEFAULT \'pending\',\n' +
-        '  reimbursable BOOLEAN NOT NULL DEFAULT TRUE,\n' +
         '  note TEXT,\n' +
         '  receipt_url TEXT,\n' +
+        '  screenshot_url TEXT,\n' +
         '  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),\n' +
         '  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()\n' +
         ')'
@@ -133,6 +133,8 @@ async function ensureInitialized() {
     await p.query('ALTER TABLE my_money_categories ADD COLUMN IF NOT EXISTS user_id BIGINT REFERENCES my_money_users(id) ON DELETE CASCADE')
     await p.query('ALTER TABLE my_money_trips ADD COLUMN IF NOT EXISTS user_id BIGINT REFERENCES my_money_users(id) ON DELETE CASCADE')
     await p.query('ALTER TABLE my_money_expenses ADD COLUMN IF NOT EXISTS user_id BIGINT REFERENCES my_money_users(id) ON DELETE CASCADE')
+    await p.query('ALTER TABLE my_money_expenses ADD COLUMN IF NOT EXISTS screenshot_url TEXT')
+    await p.query('ALTER TABLE my_money_expenses DROP COLUMN IF EXISTS reimbursable')
 
     // Drop old unique constraint on category name, and create a new compound one with user_id
     await p.query('ALTER TABLE my_money_categories DROP CONSTRAINT IF EXISTS my_money_categories_name_key')

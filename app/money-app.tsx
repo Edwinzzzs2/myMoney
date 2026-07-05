@@ -135,7 +135,6 @@ export function MoneyApp() {
       total: 0,
       month: 0,
       today: 0,
-      reimbursable: 0,
       pendingReimbursement: 0,
       reimbursed: 0,
       countToday: 0,
@@ -148,8 +147,7 @@ export function MoneyApp() {
         summary.today += amount
         summary.countToday += 1
       }
-      if (expense.reimbursable) summary.reimbursable += amount
-      if (expense.expense_date?.startsWith(monthKey) && expense.reimbursement_status === 'pending') summary.pendingReimbursement += amount
+      if (expense.reimbursement_status === 'pending') summary.pendingReimbursement += amount
       if (expense.expense_date?.startsWith(monthKey) && expense.reimbursement_status === 'reimbursed') summary.reimbursed += amount
     }
     return summary
@@ -187,38 +185,8 @@ export function MoneyApp() {
   const selectedExpenseTotal = useMemo(() => selectedExpenses.reduce((sum, e) => sum + Number(e.amount || 0), 0), [selectedExpenses])
   const allFilteredExpensesSelected = filteredExpenses.length > 0 && filteredExpenses.every((e) => selectedExpenseIdSet.has(e.id))
 
-  const stats = useMemo(() => {
-    const monthKey = todayISO().slice(0, 7)
-    const monthExpenses = expenses.filter((item) => item.expense_date?.startsWith(monthKey))
-    const categoryTotals = activeCategories
-      .map((category) => ({
-        category,
-        amount: monthExpenses
-          .filter((e) => e.category_id === category.id)
-          .reduce((sum, e) => sum + Number(e.amount || 0), 0),
-      }))
-      .filter((item) => item.amount > 0)
-      .sort((a, b) => b.amount - a.amount)
 
-    const weekly = [0, 0, 0, 0, 0]
-    for (const expense of monthExpenses) {
-      const day = Number(expense.expense_date.slice(-2))
-      const index = Math.min(4, Math.max(0, Math.ceil(day / 7) - 1))
-      weekly[index] += Number(expense.amount || 0)
-    }
 
-    const tripTotals = trips
-      .map((trip) => ({
-        trip,
-        amount: expenses
-          .filter((e) => e.trip_id === trip.id)
-          .reduce((sum, e) => sum + Number(e.amount || 0), 0),
-      }))
-      .filter((item) => item.amount > 0)
-      .sort((a, b) => b.amount - a.amount)
-
-    return { categoryTotals, weekly, tripTotals, maxWeek: Math.max(1, ...weekly) }
-  }, [activeCategories, expenses, trips])
 
   useEffect(() => {
     void loadData()
@@ -490,9 +458,9 @@ export function MoneyApp() {
       payment_method: expense.payment_method,
       invoice_status: expense.invoice_status,
       reimbursement_status: expense.reimbursement_status,
-      reimbursable: expense.reimbursable,
       note: expense.note || '',
       receipt_url: expense.receipt_url || '',
+      screenshot_url: expense.screenshot_url || '',
     })
     setActiveTab('record')
   }
@@ -822,14 +790,30 @@ export function MoneyApp() {
   function buildExportData(expensesToExport: Expense[]) {
     const receiptFiles: ReturnType<typeof createReceiptZipFile>[] = []
     const receiptPaths = new Map<string, string>()
+    const screenshotPaths = new Map<string, string>()
     for (const expense of expensesToExport) {
-      const receiptFile = createReceiptZipFile({ ...expense, receipt_url: expense.receipt_url ?? undefined })
-      if (!receiptFile) continue
-      receiptFiles.push(receiptFile)
-      receiptPaths.set(expense.id, receiptFile.name)
+      if (expense.receipt_url) {
+        const receiptFile = createReceiptZipFile({ ...expense, receipt_url: expense.receipt_url })
+        if (receiptFile) {
+          receiptFiles.push(receiptFile)
+          receiptPaths.set(expense.id, receiptFile.name)
+        }
+      }
+      if (expense.screenshot_url) {
+        const screenshotFile = createReceiptZipFile({
+          id: expense.id + '-screenshot',
+          expense_date: expense.expense_date,
+          title: expense.title + '-消费截图',
+          receipt_url: expense.screenshot_url,
+        })
+        if (screenshotFile) {
+          receiptFiles.push(screenshotFile)
+          screenshotPaths.set(expense.id, screenshotFile.name)
+        }
+      }
     }
     const rows = [
-      ['日期', '时间', '行程', '目的地', '分类', '标题', '商户', '金额', '支付方式', '发票', '报销状态', '备注', '票据文件', '票据链接'],
+      ['日期', '时间', '行程', '目的地', '分类', '标题', '商户', '金额', '支付方式', '发票', '报销状态', '备注', '发票文件', '发票链接', '消费截图文件', '消费截图链接'],
       ...expensesToExport.map((expense) => [
         expense.expense_date,
         expense.expense_time || '',
@@ -845,6 +829,8 @@ export function MoneyApp() {
         expense.note || '',
         receiptPaths.get(expense.id) || '',
         expense.receipt_url && !expense.receipt_url.startsWith('data:') ? expense.receipt_url : '',
+        screenshotPaths.get(expense.id) || '',
+        expense.screenshot_url && !expense.screenshot_url.startsWith('data:') ? expense.screenshot_url : '',
       ]),
     ]
     return {
@@ -922,12 +908,12 @@ export function MoneyApp() {
       merchant: parsed.merchant || '',
       note: parsed.note || sourceText,
       receipt_url: parsed.receipt_url || '',
+      screenshot_url: parsed.screenshot_url || '',
       expense_date: parsed.expense_date || todayISO(),
       expense_time: parsed.expense_time || nowTime(),
       payment_method: normalizePaymentMethod(parsed.payment_method || ''),
       invoice_status: normalizeInvoiceStatus(parsed.invoice_status || ''),
       reimbursement_status: parsed.reimbursement_status || 'pending',
-      reimbursable: parsed.reimbursable !== false,
     }
   }
 
@@ -1186,7 +1172,7 @@ export function MoneyApp() {
             />
           ) : null}
 
-          {activeTab === 'stats' ? <StatsPage totals={totals} stats={stats} /> : null}
+          {activeTab === 'stats' ? <StatsPage expenses={expenses} activeCategories={activeCategories} trips={trips} /> : null}
 
           {activeTab === 'history' ? (
             <HistoryView
