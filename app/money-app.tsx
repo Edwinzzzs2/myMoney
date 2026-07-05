@@ -26,6 +26,7 @@ import type {
   InvoiceStatus,
   PaymentMethod,
   SettingsPanel,
+  SmartAiUsage,
   SmartMode,
   TabKey,
   Trip,
@@ -64,10 +65,24 @@ type ConfirmActionState = {
 }
 const preferredTripStorageKey = 'myMoney.preferredTripId'
 
+function toMonthKey(date: Date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
+}
+
+function parseMonthKey(key: string) {
+  const [year, month] = key.split('-').map(Number)
+  return new Date(year, month - 1, 1)
+}
+
+function formatStatsMonthLabel(key: string) {
+  return parseMonthKey(key).toLocaleDateString('zh-CN', { year: 'numeric', month: 'long' })
+}
+
 export function MoneyApp() {
   const { resolvedTheme, setTheme } = useTheme()
   const isDark = resolvedTheme === 'dark'
   const [activeTab, setActiveTab] = useState<TabKey>('record')
+  const [statsSelectedMonth, setStatsSelectedMonth] = useState(() => toMonthKey(new Date()))
   const [categories, setCategories] = useState<Category[]>([])
   const [trips, setTrips] = useState<Trip[]>([])
   const [archivedTrips, setArchivedTrips] = useState<Trip[]>([])
@@ -117,6 +132,7 @@ export function MoneyApp() {
   const [smartMode, setSmartMode] = useState<SmartMode>('text')
   const [smartText, setSmartText] = useState('')
   const [smartDraft, setSmartDraft] = useState<ExpenseFormState | null>(null)
+  const [smartUsage, setSmartUsage] = useState<SmartAiUsage | null>(null)
   const [listening, setListening] = useState(false)
   const [analyzing, setAnalyzing] = useState(false)
   const [recordingSeconds, setRecordingSeconds] = useState(0)
@@ -294,6 +310,7 @@ export function MoneyApp() {
     try {
       await fetch('/api/auth/logout', { method: 'POST' })
       setUser(null)
+      setSmartUsage(null)
       setActiveTab('record')
       setSettingsPanel(null)
     } catch (e) {
@@ -1100,9 +1117,20 @@ export function MoneyApp() {
     }
   }
 
+  async function loadSmartUsage() {
+    try {
+      const usage = await fetchJson<SmartAiUsage>('/api/ai/parse-expense')
+      setSmartUsage(usage)
+    } catch {}
+  }
+
   async function analyzeSmartText(inputText = smartText) {
     const text = inputText.trim()
     if (!text) return
+    if (smartUsage?.daily_remaining === 0) {
+      setError(`今天的智能记账次数已用完（每天最多 ${smartUsage.daily_limit} 次），请明天再试。`)
+      return
+    }
     setAnalyzing(true)
     setError('')
     try {
@@ -1117,9 +1145,15 @@ export function MoneyApp() {
           default_trip_id: form.trip_id || getPreferredTripId(trips),
         }),
       })
-      setSmartDraft(normalizeAiDraft(parsed, text))
+      const { ai_usage, ...expenseDraft } = parsed
+      if (ai_usage) setSmartUsage(ai_usage)
+      setSmartDraft(normalizeAiDraft(expenseDraft, text))
       setVoiceStatus('智能解析已完成，请确认账单明细')
     } catch (e: any) {
+      if (smartUsage && friendlyErrorMessage(e, '').includes('次数已用完')) {
+        setSmartUsage({ ...smartUsage, daily_remaining: 0 })
+      }
+      void loadSmartUsage()
       setSmartDraft(parseSmartRecord(text))
       setError(`${friendlyErrorMessage(e, '智能解析不可用')}，已使用本地规则兜底`)
       setVoiceStatus('智能解析暂不可用，已用本地规则生成草稿')
@@ -1191,6 +1225,7 @@ export function MoneyApp() {
     setSmartMode('text')
     setVoiceStatus('点击语音输入后会自动开始识别')
     setSmartOpen(true)
+    void loadSmartUsage()
   }
 
   function startBrowserRecognition() {
@@ -1236,6 +1271,7 @@ export function MoneyApp() {
     discardVoiceSession()
     setSmartMode('voice')
     setSmartOpen(true)
+    void loadSmartUsage()
     setSmartDraft(null)
     setError('')
     setVoiceStatus('正在请求浏览器语音识别权限...')
@@ -1250,6 +1286,7 @@ export function MoneyApp() {
     discardVoiceSession()
     setSmartMode('text')
     setSmartOpen(true)
+    void loadSmartUsage()
     setSmartDraft(null)
     setError('')
     setVoiceStatus('正在请求浏览器语音识别权限...')
@@ -1293,6 +1330,22 @@ export function MoneyApp() {
     }
   }
 
+  const currentStatsMonthKey = toMonthKey(new Date())
+  const statsIsCurrentMonth = statsSelectedMonth >= currentStatsMonthKey
+
+  function prevStatsMonth() {
+    const date = parseMonthKey(statsSelectedMonth)
+    date.setMonth(date.getMonth() - 1)
+    setStatsSelectedMonth(toMonthKey(date))
+  }
+
+  function nextStatsMonth() {
+    if (statsIsCurrentMonth) return
+    const date = parseMonthKey(statsSelectedMonth)
+    date.setMonth(date.getMonth() + 1)
+    setStatsSelectedMonth(toMonthKey(date))
+  }
+
   // ─── 渲染 ─────────────────────────────────────────────────
   const manualForm = (
     <ManualExpenseForm
@@ -1324,7 +1377,7 @@ export function MoneyApp() {
   return (
     <main className="fixed inset-0 flex flex-col overflow-hidden bg-[#f6f7f4] pt-[env(safe-area-inset-top)] text-[#161a17] dark:bg-[#070a12] dark:text-white">
       <div className="pointer-events-none fixed inset-0 bg-[linear-gradient(180deg,#fffdf8_0%,#f3f6f1_48%,#eef3f8_100%)] dark:bg-[radial-gradient(circle_at_20%_0%,rgba(45,212,191,0.18),transparent_30%),radial-gradient(circle_at_78%_12%,rgba(91,140,255,0.18),transparent_28%),linear-gradient(145deg,#070a12_0%,#0b1020_55%,#070a12_100%)]" />
-      <div className="relative mx-auto grid min-h-0 w-full max-w-[1440px] flex-1 grid-cols-1 lg:grid-cols-[270px_minmax(0,1fr)_390px]">
+      <div className="relative mx-auto grid min-h-0 w-full max-w-[1560px] flex-1 grid-cols-1 lg:grid-cols-[270px_minmax(0,1fr)_390px] xl:grid-cols-[270px_minmax(0,1fr)_440px] 2xl:grid-cols-[270px_minmax(0,1fr)_480px]">
         <DesktopNav activeTab={activeTab} setActiveTab={setActiveTab} totals={totals} />
 
         <div className="flex min-h-0 min-w-0 flex-col">
@@ -1333,8 +1386,12 @@ export function MoneyApp() {
             username={user?.username}
             loading={loading}
             batchSelecting={batchSelecting}
+            statsMonthLabel={formatStatsMonthLabel(statsSelectedMonth)}
+            statsNextDisabled={statsIsCurrentMonth}
             onReload={loadData}
             onToggleBatchSelecting={() => (batchSelecting ? exitBatchSelection() : setBatchSelecting(true))}
+            onStatsPrevMonth={prevStatsMonth}
+            onStatsNextMonth={nextStatsMonth}
           />
 
           <section className="min-h-0 min-w-0 flex-1 overflow-y-auto pb-[calc(6.25rem+env(safe-area-inset-bottom))] custom-scrollbar lg:pb-8">
@@ -1356,7 +1413,12 @@ export function MoneyApp() {
 
             {activeTab === 'stats' ? (
               <div className="px-4 pt-4 sm:px-6 lg:px-8 lg:pt-7">
-                <StatsPage expenses={expenses} activeCategories={activeCategories} trips={trips} />
+                <StatsPage
+                  expenses={expenses}
+                  activeCategories={activeCategories}
+                  trips={trips}
+                  selectedMonth={statsSelectedMonth}
+                />
               </div>
             ) : null}
 
@@ -1380,7 +1442,6 @@ export function MoneyApp() {
                 onRequestBatchUpdate={requestBatchUpdateReimbursementStatus}
                 onEditExpense={editExpense}
                 onDeleteExpense={deleteExpense}
-                onQuickStatus={quickStatus}
               />
             ) : null}
 
@@ -1421,7 +1482,7 @@ export function MoneyApp() {
           </section>
         </div>
 
-        <aside className="hidden h-full overflow-y-auto border-l border-slate-200/80 bg-white/90 px-5 py-7 custom-scrollbar dark:border-white/10 dark:bg-white/[0.035] lg:block">
+        <aside className="hidden h-full overflow-y-auto border-l border-slate-200/80 bg-white/90 px-5 py-7 custom-scrollbar dark:border-white/10 dark:bg-white/[0.035] xl:px-6 lg:block">
           <ManualExpenseForm
             activeCategories={activeCategories}
             trips={trips}
@@ -1564,6 +1625,7 @@ export function MoneyApp() {
         smartMode={smartMode}
         smartText={smartText}
         smartDraft={smartDraft}
+        smartUsage={smartUsage}
         listening={listening}
         analyzing={analyzing}
         saving={saving}

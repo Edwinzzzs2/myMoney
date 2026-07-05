@@ -77,6 +77,19 @@ async function consumeDailyUsage(userId: string, dailyLimit: number) {
   return rows[0] ? Number(rows[0].usage_count) : null
 }
 
+async function getDailyUsage(userId: string, dailyLimit: number) {
+  const rows = await query(
+    'SELECT usage_count FROM my_money_ai_daily_usage WHERE user_id = $1 AND usage_date = $2::date',
+    [userId, getShanghaiDate()]
+  )
+  const usageCount = Number(rows[0]?.usage_count || 0)
+
+  return {
+    daily_limit: dailyLimit,
+    daily_remaining: Math.max(dailyLimit - usageCount, 0),
+  }
+}
+
 function getChatCompletionsUrl(baseUrl: string) {
   const trimmed = baseUrl.trim().replace(/\/+$/, '')
   if (!trimmed) return ''
@@ -128,6 +141,17 @@ function normalizeParsedExpense(raw: ParsedExpense, request: Required<Pick<Parse
     note: String(raw.note || request.text || '').trim(),
     receipt_url: String(raw.receipt_url || '').trim(),
     source: 'ai',
+  }
+}
+
+export async function GET() {
+  const user = await getAuthenticatedUser()
+  if (!user) return NextResponse.json({ message: '请先登录后再操作。' }, { status: 401 })
+
+  try {
+    return NextResponse.json(await getDailyUsage(user.userId, getDailyLimit()))
+  } catch (e: any) {
+    return NextResponse.json({ message: friendlyErrorMessage(e, '读取智能记账次数失败') }, { status: 500 })
   }
 }
 
@@ -192,7 +216,13 @@ export async function POST(req: NextRequest) {
     const usageCount = await consumeDailyUsage(user.userId, dailyLimit)
     if (usageCount === null) {
       return NextResponse.json(
-        { message: `今天的智能记账次数已用完（每天最多 ${dailyLimit} 次），请明天再试。` },
+        {
+          message: `今天的智能记账次数已用完（每天最多 ${dailyLimit} 次），请明天再试。`,
+          ai_usage: {
+            daily_limit: dailyLimit,
+            daily_remaining: 0,
+          },
+        },
         { status: 429 }
       )
     }
@@ -235,10 +265,17 @@ export async function POST(req: NextRequest) {
     }
 
     const parsed = normalizeParsedExpense(extractJson(content), { ...body, text, today, now })
-    return NextResponse.json(parsed, {
+    const dailyRemaining = Math.max(dailyLimit - usageCount, 0)
+    return NextResponse.json({
+      ...parsed,
+      ai_usage: {
+        daily_limit: dailyLimit,
+        daily_remaining: dailyRemaining,
+      },
+    }, {
       headers: {
         'X-AI-Daily-Limit': String(dailyLimit),
-        'X-AI-Daily-Remaining': String(Math.max(dailyLimit - usageCount, 0)),
+        'X-AI-Daily-Remaining': String(dailyRemaining),
       },
     })
   } catch (e: any) {

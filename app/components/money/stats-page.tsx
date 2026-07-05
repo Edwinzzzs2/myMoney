@@ -1,7 +1,7 @@
 "use client"
 
 import { useMemo, useState } from 'react'
-import { BarChart3, ChevronLeft, ChevronRight, MapPin, TrendingUp } from 'lucide-react'
+import { BarChart3, ChevronRight, MapPin, TrendingUp } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
@@ -15,6 +15,7 @@ type StatsPageProps = {
   expenses: Expense[]
   activeCategories: Category[]
   trips: Trip[]
+  selectedMonth: string
 }
 
 type StatsMode = 'category' | 'trip' | 'trend'
@@ -25,52 +26,9 @@ const modes: Array<{ key: StatsMode; label: string }> = [
   { key: 'trend', label: '趋势' },
 ]
 
-/** 返回 YYYY-MM 格式的月份字符串 */
-function toMonthKey(date: Date) {
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
-}
-
-/** 将 YYYY-MM 解析为 Date（当月1日） */
-function parseMonthKey(key: string) {
-  const [y, m] = key.split('-').map(Number)
-  return new Date(y, m - 1, 1)
-}
-
-/** 格式化月份为中文显示 */
-function formatMonthLabel(key: string) {
-  const d = parseMonthKey(key)
-  return d.toLocaleDateString('zh-CN', { year: 'numeric', month: 'long' })
-}
-
-export function StatsPage({ expenses, activeCategories, trips }: StatsPageProps) {
-  const currentMonthKey = toMonthKey(new Date())
-  const [selectedMonth, setSelectedMonth] = useState(currentMonthKey)
+export function StatsPage({ expenses, activeCategories, trips, selectedMonth }: StatsPageProps) {
   const [mode, setMode] = useState<StatsMode>('category')
 
-  // 是否已经是当前月（不能往后翻）
-  const isCurrentMonth = selectedMonth >= currentMonthKey
-
-  // 获取已有记录的所有月份（用于判断能否往前翻）
-  const availableMonths = useMemo(() => {
-    const months = new Set<string>()
-    for (const e of expenses) {
-      if (e.expense_date) months.add(e.expense_date.slice(0, 7))
-    }
-    return months
-  }, [expenses])
-
-  // 切换月份
-  function prevMonth() {
-    const d = parseMonthKey(selectedMonth)
-    d.setMonth(d.getMonth() - 1)
-    setSelectedMonth(toMonthKey(d))
-  }
-  function nextMonth() {
-    if (isCurrentMonth) return
-    const d = parseMonthKey(selectedMonth)
-    d.setMonth(d.getMonth() + 1)
-    setSelectedMonth(toMonthKey(d))
-  }
   // 按所选月份过滤账单
   const monthExpenses = useMemo(
     () => expenses.filter((e) => e.expense_date?.startsWith(selectedMonth)),
@@ -148,39 +106,6 @@ export function StatsPage({ expenses, activeCategories, trips }: StatsPageProps)
 
   return (
     <div className="mx-auto max-w-[430px] space-y-3.5 lg:max-w-5xl">
-      {/* 月份选择器 */}
-      <div className="flex items-center justify-end">
-        <div className="flex items-center gap-1">
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className="h-9 w-9 rounded-md text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-white/10"
-            onClick={prevMonth}
-            aria-label="上个月"
-          >
-            <ChevronLeft className="h-4 w-4" />
-          </Button>
-          <span className="flex h-9 min-w-[9rem] items-center justify-center rounded-md border border-slate-200/80 bg-white/80 px-3 text-sm font-medium text-slate-700 dark:border-white/10 dark:bg-white/[0.06] dark:text-slate-200">
-            {formatMonthLabel(selectedMonth)}
-          </span>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className={cn(
-              'h-9 w-9 rounded-md text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-white/10',
-              isCurrentMonth && 'cursor-not-allowed opacity-30'
-            )}
-            onClick={nextMonth}
-            disabled={isCurrentMonth}
-            aria-label="下个月"
-          >
-            <ChevronRight className="h-4 w-4" />
-          </Button>
-        </div>
-      </div>
-
       {/* 月度汇总卡片 */}
       <Card className="overflow-hidden rounded-lg border-slate-200/80 bg-white/80 shadow-[0_10px_28px_rgba(15,23,42,0.07)] backdrop-blur dark:border-white/10 dark:bg-white/[0.055] dark:shadow-none">
         <div className="grid grid-cols-3 divide-x divide-slate-200/70 dark:divide-white/10">

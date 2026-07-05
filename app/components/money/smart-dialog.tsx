@@ -7,8 +7,15 @@ import { Button } from '@/components/ui/button'
 import { DatePicker } from '@/components/ui/date-picker'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { formatVoiceTime } from '@/app/components/money/money-utils'
-import type { Category, ExpenseFormState, InvoiceStatus, SmartMode, Trip } from '@/app/components/money/types'
+import type { Category, ExpenseFormState, InvoiceStatus, SmartAiUsage, SmartMode, Trip } from '@/app/components/money/types'
 import { CheckCircle2, Loader2, Mic, Sparkles, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -17,6 +24,7 @@ interface SmartDialogProps {
   smartMode: SmartMode
   smartText: string
   smartDraft: ExpenseFormState | null
+  smartUsage: SmartAiUsage | null
   listening: boolean
   analyzing: boolean
   saving: boolean
@@ -47,11 +55,14 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
   )
 }
 
+const selectTriggerClass = 'h-10 bg-white text-sm dark:bg-black/20'
+
 export function SmartDialog({
   smartOpen,
   smartMode,
   smartText,
   smartDraft,
+  smartUsage,
   listening,
   analyzing,
   saving,
@@ -73,6 +84,9 @@ export function SmartDialog({
   onAddSmartDraft,
 }: SmartDialogProps) {
   if (!smartOpen) return null
+
+  const usageLabel = smartUsage ? `剩余 ${smartUsage.daily_remaining} 次` : '查询中'
+  const quotaDepleted = smartUsage?.daily_remaining === 0
 
   return (
     <div className="fixed inset-0 z-50 flex h-dvh items-end justify-center bg-black/35 px-3 pb-[max(env(safe-area-inset-bottom),0.75rem)] pt-[max(env(safe-area-inset-top),0.75rem)] backdrop-blur-sm dark:bg-black/70 sm:items-center sm:p-6">
@@ -140,10 +154,13 @@ export function SmartDialog({
                 type="button"
                 className="h-11 w-full bg-blue-600 text-white hover:bg-blue-700 dark:bg-blue-400 dark:text-slate-950 dark:hover:bg-blue-300"
                 onClick={onCompleteVoiceAndAnalyze}
-                disabled={analyzing || !smartText.trim()}
+                disabled={analyzing || !smartText.trim() || quotaDepleted}
               >
                 {analyzing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-                完成并解析
+                <span>{quotaDepleted ? '今日次数已用完' : '完成并解析'}</span>
+                <span className="rounded-full bg-white/[0.18] px-2 py-0.5 text-[11px] font-semibold text-white/90 dark:bg-slate-950/[0.15] dark:text-slate-950/75">
+                  {usageLabel}
+                </span>
               </Button>
             </div>
           </div>
@@ -188,10 +205,13 @@ export function SmartDialog({
               type="button"
               className="mt-3 h-10 w-full bg-blue-600 text-white hover:bg-blue-700 dark:bg-blue-400 dark:text-slate-950 dark:hover:bg-blue-300"
               onClick={onAnalyzeSmartText}
-              disabled={analyzing || !smartText.trim()}
+              disabled={analyzing || !smartText.trim() || quotaDepleted}
             >
               {analyzing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-              解析
+              <span>{quotaDepleted ? '今日次数已用完' : '解析'}</span>
+              <span className="rounded-full bg-white/[0.18] px-2 py-0.5 text-[11px] font-semibold text-white/90 dark:bg-slate-950/[0.15] dark:text-slate-950/75">
+                {usageLabel}
+              </span>
             </Button>
           </>
         )}
@@ -218,22 +238,31 @@ export function SmartDialog({
                 <Input value={smartDraft.title} onChange={(event) => onPatchSmartDraft({ title: event.target.value })} className="h-10" />
               </Field>
               <Field label="分类">
-                <select value={smartDraft.category_id} onChange={(event) => onPatchSmartDraft({ category_id: event.target.value })} className="field-input h-10">
-                  {activeCategories.map((category) => (
-                    <option key={category.id} value={category.id}>{category.name}</option>
-                  ))}
-                </select>
+                <Select value={smartDraft.category_id || undefined} onValueChange={(categoryId) => onPatchSmartDraft({ category_id: categoryId })} disabled={!activeCategories.length}>
+                  <SelectTrigger className={selectTriggerClass}>
+                    <SelectValue placeholder="暂无分类" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {activeCategories.map((category) => (
+                      <SelectItem key={category.id} value={category.id}>{category.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </Field>
               <Field label="行程">
-                <select value={smartDraft.trip_id} onChange={(event) => onPatchSmartDraft({ trip_id: event.target.value })} className="field-input h-10">
-                  {trips.length ? (
-                    trips.map((trip) => (
-                      <option key={trip.id} value={trip.id}>{trip.name}</option>
-                    ))
-                  ) : (
-                    <option value="">暂无行程</option>
-                  )}
-                </select>
+                <Select value={smartDraft.trip_id || undefined} onValueChange={(tripId) => onPatchSmartDraft({ trip_id: tripId })} disabled={!trips.length && !smartDraft.trip_id}>
+                  <SelectTrigger className={selectTriggerClass}>
+                    <SelectValue placeholder="暂无行程" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {smartDraft.trip_id && !trips.some((trip) => trip.id === smartDraft.trip_id) ? (
+                      <SelectItem value={smartDraft.trip_id}>{smartDraft.trip_id}</SelectItem>
+                    ) : null}
+                    {trips.map((trip) => (
+                      <SelectItem key={trip.id} value={trip.id}>{trip.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </Field>
               <Field label="日期">
                 <DatePicker
@@ -244,15 +273,19 @@ export function SmartDialog({
                 />
               </Field>
               <Field label="发票">
-                <select value={smartDraft.invoice_status} onChange={(event) => onPatchSmartDraft({ invoice_status: event.target.value })} className="field-input h-10">
-                  {smartDraft.invoice_status && !activeInvoiceStatuses.some((status) => status.value === smartDraft.invoice_status) ? (
-                    <option value={smartDraft.invoice_status}>{invoiceLabelMap[smartDraft.invoice_status] || smartDraft.invoice_status}</option>
-                  ) : null}
-                  {activeInvoiceStatuses.map((status) => (
-                    <option key={status.id} value={status.value}>{status.label}</option>
-                  ))}
-                  {!activeInvoiceStatuses.length ? <option value="">暂无发票状态</option> : null}
-                </select>
+                <Select value={smartDraft.invoice_status || undefined} onValueChange={(invoiceStatus) => onPatchSmartDraft({ invoice_status: invoiceStatus })} disabled={!activeInvoiceStatuses.length && !smartDraft.invoice_status}>
+                  <SelectTrigger className={selectTriggerClass}>
+                    <SelectValue placeholder="暂无发票状态" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {smartDraft.invoice_status && !activeInvoiceStatuses.some((status) => status.value === smartDraft.invoice_status) ? (
+                      <SelectItem value={smartDraft.invoice_status}>{invoiceLabelMap[smartDraft.invoice_status] || smartDraft.invoice_status}</SelectItem>
+                    ) : null}
+                    {activeInvoiceStatuses.map((status) => (
+                      <SelectItem key={status.id} value={status.value}>{status.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </Field>
             </div>
             <Button

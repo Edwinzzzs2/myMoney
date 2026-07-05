@@ -26,6 +26,7 @@ JWT_SECRET=replace-with-a-long-random-secret
 AI_BASE_URL=https://api.openai.com/v1
 AI_API_KEY=******
 AI_MODEL=gpt-4o-mini
+AI_DAILY_LIMIT=20
 ```
 
 首次访问 API 时会自动创建：
@@ -33,6 +34,7 @@ AI_MODEL=gpt-4o-mini
 - `my_money_categories`
 - `my_money_trips`
 - `my_money_expenses`
+- `my_money_ai_daily_usage`
 
 ## AI 语音解析
 
@@ -45,6 +47,7 @@ AI 接口使用 OpenAI 兼容的 `chat/completions` 协议：
 - `AI_BASE_URL`: API 地址，例如 `https://api.openai.com/v1` 或你的中转地址。
 - `AI_API_KEY`: API Key。
 - `AI_MODEL`: 解析模型，默认示例为 `gpt-4o-mini`。
+- `AI_DAILY_LIMIT`: 每个用户每天可调用智能记账解析的次数，未配置时默认 `20`，按 `Asia/Shanghai` 自然日统计。
 
 语音输入只使用浏览器自带的 `SpeechRecognition` / `webkitSpeechRecognition` 做实时识别，不再上传录音做 AI 转写。浏览器不支持或识别失败时，可以直接在识别结果框里手动输入或修改文字，再调用 `/api/ai/parse-expense` 解析账单字段。如果 AI 未配置或调用失败，前端会用本地规则兜底解析，不影响手动记账。
 

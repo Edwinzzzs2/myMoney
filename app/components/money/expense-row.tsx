@@ -18,7 +18,6 @@ type ExpenseRowProps = {
   onToggleSelected?: (expense: Expense) => void
   onEdit: (expense: Expense) => void
   onDelete: (expense: Expense) => void
-  onQuickStatus: (expense: Expense, status: string) => void
 }
 
 export function ExpenseRow({
@@ -31,13 +30,11 @@ export function ExpenseRow({
   onToggleSelected,
   onEdit,
   onDelete,
-  onQuickStatus,
 }: ExpenseRowProps) {
   const Icon = getCategoryIcon(expense.category_icon)
   const isPending = expense.reimbursement_status === 'pending'
   const reimbursementLabel = reimbursementLabels[expense.reimbursement_status] || expense.reimbursement_status
   const invoiceLabel = invoiceLabelMap?.[expense.invoice_status] || defaultInvoiceLabels[expense.invoice_status] || expense.invoice_status
-  const nextReimbursementStatus = isPending ? 'reimbursed' : 'pending'
 
   return (
     <article
@@ -94,25 +91,17 @@ export function ExpenseRow({
                 >
                   {invoiceLabel}
                 </Badge>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
+                <Badge
+                  variant="secondary"
                   className={cn(
-                    'h-7 rounded-md px-2 text-xs font-semibold',
+                    'border-0 px-2 py-1 text-[0.68rem] font-semibold',
                     isPending
-                      ? 'bg-amber-50 text-amber-700 hover:bg-emerald-50 hover:text-emerald-800 dark:bg-amber-300/10 dark:text-amber-200 dark:hover:bg-emerald-300/10 dark:hover:text-emerald-200'
-                      : 'bg-emerald-50 text-emerald-700 hover:bg-amber-50 hover:text-amber-800 dark:bg-emerald-300/10 dark:text-emerald-200 dark:hover:bg-amber-300/10 dark:hover:text-amber-200'
+                      ? 'bg-amber-50 text-amber-700 dark:bg-amber-300/10 dark:text-amber-200'
+                      : 'bg-emerald-50 text-emerald-700 dark:bg-emerald-300/10 dark:text-emerald-200'
                   )}
-                  onClick={(event) => {
-                    event.stopPropagation()
-                    onQuickStatus(expense, nextReimbursementStatus)
-                  }}
-                  aria-label={isPending ? `将${expense.title}标记为已报销` : `将${expense.title}改为待报销`}
-                  title={isPending ? '标记为已报销' : '改为待报销'}
                 >
                   {reimbursementLabel}
-                </Button>
+                </Badge>
               </div>
             </div>
           </div>

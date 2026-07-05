@@ -4,7 +4,7 @@
 import { Button } from '@/components/ui/button'
 import { formatMoney, tabs } from '@/app/components/money/money-utils'
 import type { TabKey } from '@/app/components/money/types'
-import { ChevronRight, RefreshCcw, Wallet } from 'lucide-react'
+import { ChevronLeft, ChevronRight, RefreshCcw, Wallet } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 interface MoneyTopBarProps {
@@ -12,8 +12,12 @@ interface MoneyTopBarProps {
   username?: string
   loading: boolean
   batchSelecting: boolean
+  statsMonthLabel?: string
+  statsNextDisabled?: boolean
   onReload: () => void
   onToggleBatchSelecting: () => void
+  onStatsPrevMonth?: () => void
+  onStatsNextMonth?: () => void
 }
 
 export function MoneyTopBar({
@@ -21,13 +25,18 @@ export function MoneyTopBar({
   username,
   loading,
   batchSelecting,
+  statsMonthLabel,
+  statsNextDisabled = false,
   onReload,
   onToggleBatchSelecting,
+  onStatsPrevMonth,
+  onStatsNextMonth,
 }: MoneyTopBarProps) {
   if (activeTab !== 'record' && activeTab !== 'stats' && activeTab !== 'history' && activeTab !== 'settings') return null
 
   const isHistory = activeTab === 'history'
   const isRecord = activeTab === 'record'
+  const isStats = activeTab === 'stats'
   const title = isRecord ? '记账' : activeTab === 'stats' ? '统计' : isHistory ? '历史' : '设置'
 
   return (
@@ -40,8 +49,40 @@ export function MoneyTopBar({
           {isRecord && username ? <p className="mt-0.5 truncate text-xs text-slate-500 dark:text-slate-400">欢迎，{username}</p> : null}
         </div>
 
-        {isRecord || isHistory ? (
+        {isRecord || isHistory || isStats ? (
           <div className="flex shrink-0 items-center gap-2">
+            {isStats ? (
+              <div className="flex items-center gap-1 rounded-lg border border-slate-200/80 bg-white/80 p-1 shadow-sm dark:border-white/10 dark:bg-white/[0.06]">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 rounded-md text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-white/10"
+                  onClick={onStatsPrevMonth}
+                  aria-label="上个月"
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </Button>
+                <span className="flex h-8 min-w-[6.8rem] items-center justify-center rounded-md px-2 text-sm font-semibold text-slate-800 dark:text-slate-100 sm:min-w-[8.5rem]">
+                  {statsMonthLabel}
+                </span>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className={cn(
+                    'h-8 w-8 rounded-md text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-white/10',
+                    statsNextDisabled && 'cursor-not-allowed opacity-30'
+                  )}
+                  onClick={onStatsNextMonth}
+                  disabled={statsNextDisabled}
+                  aria-label="下个月"
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+              </div>
+            ) : null}
+
             {isHistory ? (
               <Button
                 type="button"

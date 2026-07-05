@@ -86,6 +86,12 @@ export type ExpenseFormState = {
 export type AiParsedExpense = Omit<Partial<ExpenseFormState>, 'amount'> & {
   amount?: string | number
   source?: string
+  ai_usage?: SmartAiUsage
+}
+
+export type SmartAiUsage = {
+  daily_limit: number
+  daily_remaining: number
 }
 
 export type SmartMode = 'text' | 'voice'

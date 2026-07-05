@@ -5,6 +5,13 @@ import { useEffect, useState, type ComponentType } from 'react'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import type { Category, InvoiceStatus, PaymentMethod, SettingsPanel, Trip } from '@/app/components/money/types'
 import {
   Archive,
@@ -112,7 +119,13 @@ export function SettingsView({
 }: SettingsViewProps) {
   return (
     <div className="mx-auto max-w-[430px] space-y-4 lg:max-w-5xl">
-      <Card className="rounded-lg border-slate-200/80 bg-white/80 p-4 shadow-[0_10px_24px_rgba(15,23,42,0.06)] backdrop-blur dark:border-white/10 dark:bg-white/[0.045] dark:shadow-none">
+      <Card
+        role="button"
+        tabIndex={0}
+        onClick={onOpenUserPanel}
+        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') onOpenUserPanel() }}
+        className="cursor-pointer rounded-lg border-slate-200/80 bg-white/80 p-4 shadow-[0_10px_24px_rgba(15,23,42,0.06)] backdrop-blur transition-colors hover:bg-slate-50 dark:border-white/10 dark:bg-white/[0.045] dark:shadow-none dark:hover:bg-white/[0.07]"
+      >
         <div className="flex items-center gap-3">
           <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-emerald-100 text-emerald-700 dark:bg-emerald-400/15 dark:text-emerald-300">
             <User className="h-7 w-7" />
@@ -121,16 +134,7 @@ export function SettingsView({
             <p className="font-semibold text-slate-950 dark:text-white">用户信息</p>
             <p className="mt-0.5 text-sm text-slate-500 dark:text-slate-400">用户名: {user?.username}</p>
           </div>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className="h-8 w-8 text-slate-400"
-            onClick={onOpenUserPanel}
-            aria-label="查看用户信息"
-          >
-            <ChevronRight className="h-5 w-5" />
-          </Button>
+          <ChevronRight className="h-5 w-5 text-slate-400" />
         </div>
       </Card>
 
@@ -207,23 +211,18 @@ function ExportDocRow({
         </span>
       </div>
       <div className="flex gap-2">
-        <select
-          value={tripId}
-          onChange={(event) => setTripId(event.target.value)}
-          className="h-10 min-w-0 flex-1 rounded-lg border border-slate-200/80 bg-white/80 px-3 text-sm font-medium text-slate-700 shadow-sm outline-none transition hover:bg-white dark:border-white/10 dark:bg-white/[0.045] dark:text-slate-100 dark:hover:bg-white/[0.08]"
-          aria-label="选择导出行程"
-          disabled={!trips.length || exporting}
-        >
-          {trips.length ? (
-            trips.map((trip) => (
-              <option key={trip.id} value={trip.id}>
+        <Select value={tripId || undefined} onValueChange={setTripId} disabled={!trips.length || exporting}>
+          <SelectTrigger className="h-10 min-w-0 flex-1 rounded-lg border-slate-200/80 bg-white/80 text-sm font-medium text-slate-700 shadow-sm hover:bg-white dark:border-white/10 dark:bg-white/[0.045] dark:text-slate-100 dark:hover:bg-white/[0.08]" aria-label="选择导出行程">
+            <SelectValue placeholder="暂无行程" />
+          </SelectTrigger>
+          <SelectContent>
+            {trips.map((trip) => (
+              <SelectItem key={trip.id} value={trip.id}>
                 {trip.name}
-              </option>
-            ))
-          ) : (
-            <option value="">暂无行程</option>
-          )}
-        </select>
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
         <Button
           type="button"
           className="h-10 shrink-0 rounded-lg bg-emerald-600 px-3 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-50 dark:bg-emerald-400 dark:text-slate-950 dark:hover:bg-emerald-300"

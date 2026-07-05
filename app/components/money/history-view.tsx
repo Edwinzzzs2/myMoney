@@ -4,6 +4,13 @@
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { EmptyState } from '@/app/components/money/empty-state'
 import { ExpenseRow } from '@/app/components/money/expense-row'
 import { formatMoney } from '@/app/components/money/money-utils'
@@ -32,7 +39,6 @@ interface HistoryViewProps {
   onRequestBatchUpdate: (status: BatchReimbursementStatus) => void
   onEditExpense: (expense: Expense) => void
   onDeleteExpense: (expense: Expense) => void
-  onQuickStatus: (expense: Expense, status: string) => void
 }
 
 export function HistoryView({
@@ -54,7 +60,6 @@ export function HistoryView({
   onRequestBatchUpdate,
   onEditExpense,
   onDeleteExpense,
-  onQuickStatus,
 }: HistoryViewProps) {
   return (
     <div className="pb-1">
@@ -114,17 +119,17 @@ export function HistoryView({
                 />
               </div>
 
-              <select
-                value={historyFilter}
-                onChange={(event) => onFilterChange(event.target.value as HistoryFilter)}
-                className="h-11 w-full rounded-lg border border-slate-200/80 bg-white/85 px-3 text-sm font-semibold text-slate-700 shadow-sm outline-none transition hover:bg-white dark:border-white/10 dark:bg-white/[0.06] dark:text-slate-100 dark:hover:bg-white/[0.08]"
-                aria-label="历史筛选"
-              >
-                <option value="all">全部</option>
-                <option value="invoice">待开票</option>
-                <option value="reimbursement">待报销</option>
-                <option value="reimbursed">已报销</option>
-              </select>
+              <Select value={historyFilter} onValueChange={(value) => onFilterChange(value as HistoryFilter)}>
+                <SelectTrigger className="h-11 w-full rounded-lg border-slate-200/80 bg-white/85 text-sm font-semibold text-slate-700 shadow-sm hover:bg-white dark:border-white/10 dark:bg-white/[0.06] dark:text-slate-100 dark:hover:bg-white/[0.08]" aria-label="历史筛选">
+                  <SelectValue placeholder="全部" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">全部</SelectItem>
+                  <SelectItem value="invoice">待开票</SelectItem>
+                  <SelectItem value="reimbursement">待报销</SelectItem>
+                  <SelectItem value="reimbursed">已报销</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
           ) : null}
 
@@ -149,7 +154,6 @@ export function HistoryView({
                         onToggleSelected={onToggleExpenseSelection}
                         onEdit={onEditExpense}
                         onDelete={onDeleteExpense}
-                        onQuickStatus={onQuickStatus}
                       />
                     ))}
                   </div>
