@@ -6,7 +6,8 @@ import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
-import { Dialog, DialogContent, DialogTrigger } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
+import { DateTimePicker } from '@/components/ui/date-time-picker'
 import { cn } from '@/lib/utils'
 
 import type { Category, ExpenseFormState, InvoiceStatus, PaymentMethod, Trip } from './types'
@@ -21,6 +22,8 @@ type ManualFormProps = {
   saving: boolean
   compact?: boolean
   formId?: string
+  showHeader?: boolean
+  className?: string
   onPatchForm: (patch: Partial<ExpenseFormState>) => void
   onSaveExpense: (event?: FormEvent) => void | Promise<void>
   onResetForm: (form: ExpenseFormState) => void
@@ -35,6 +38,8 @@ export function ManualForm({
   saving,
   compact = false,
   formId,
+  showHeader = true,
+  className,
   onPatchForm,
   onSaveExpense,
   onResetForm,
@@ -85,25 +90,28 @@ export function ManualForm({
     <Card
       id={formId}
       className={cn(
-        'rounded-lg border-slate-200/80 bg-white/80 p-3.5 shadow-[0_10px_24px_rgba(15,23,42,0.06)] backdrop-blur dark:border-white/10 dark:bg-white/[0.045] dark:shadow-none lg:p-4',
-        compact && 'bg-white/85 dark:bg-white/[0.035]'
+        'scroll-mt-28 rounded-lg border-slate-200/80 bg-white/80 p-3.5 shadow-[0_10px_24px_rgba(15,23,42,0.06)] backdrop-blur dark:border-white/10 dark:bg-white/[0.045] dark:shadow-none lg:p-4',
+        compact && 'bg-white/85 dark:bg-white/[0.035]',
+        className
       )}
     >
-      <div className="mb-3 flex items-center justify-between">
-        <p className="text-sm font-medium text-slate-500 dark:text-slate-400">{form.id ? '编辑账单' : '手动记账'}</p>
-        {form.id ? (
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className="h-8 w-8 text-slate-500"
-            onClick={() => onResetForm(makeBlankForm(activeCategories[0]?.id || '', trips[0]?.id || ''))}
-            aria-label="退出编辑"
-          >
-            <X className="h-4 w-4" />
-          </Button>
-        ) : null}
-      </div>
+      {showHeader ? (
+        <div className="mb-3 flex items-center justify-between">
+          <p className="text-sm font-medium text-slate-500 dark:text-slate-400">{form.id ? '编辑账单' : '手动记账'}</p>
+          {form.id ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 text-slate-500"
+              onClick={() => onResetForm(makeBlankForm(activeCategories[0]?.id || '', trips[0]?.id || ''))}
+              aria-label="退出编辑"
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          ) : null}
+        </div>
+      ) : null}
 
       <form onSubmit={onSaveExpense} className="space-y-2.5">
         <FieldRow label="金额" icon={<Tag className="h-4 w-4" />}>
@@ -194,17 +202,12 @@ export function ManualForm({
             
             {/* 支出日期与时间合并 */}
             <FieldRow label="时间">
-              <Input
-                type="datetime-local"
-                value={`${form.expense_date}T${form.expense_time ? form.expense_time.slice(0, 5) : '00:00'}`}
-                onChange={(event) => {
-                  const val = event.target.value
-                  if (val) {
-                    const [date, time] = val.split('T')
-                    onPatchForm({ expense_date: date, expense_time: time })
-                  }
-                }}
-                className="h-9 text-xs"
+              <DateTimePicker
+                date={form.expense_date}
+                time={form.expense_time}
+                onDateChange={(expenseDate) => onPatchForm({ expense_date: expenseDate })}
+                onTimeChange={(expenseTime) => onPatchForm({ expense_time: expenseTime })}
+                className="mr-1.5"
               />
             </FieldRow>
 
@@ -234,6 +237,7 @@ export function ManualForm({
                             </Button>
                           </DialogTrigger>
                           <DialogContent className="max-w-3xl max-h-[85vh] overflow-auto p-4 flex items-center justify-center border-slate-200 dark:border-white/10 bg-white dark:bg-[#101625]">
+                            <DialogTitle className="sr-only">发票图片预览</DialogTitle>
                             <img src={form.receipt_url} alt="发票图片" className="max-w-full max-h-[75vh] object-contain rounded" />
                           </DialogContent>
                         </Dialog>
@@ -268,6 +272,7 @@ export function ManualForm({
                             </Button>
                           </DialogTrigger>
                           <DialogContent className="max-w-3xl max-h-[85vh] overflow-auto p-4 flex items-center justify-center border-slate-200 dark:border-white/10 bg-white dark:bg-[#101625]">
+                            <DialogTitle className="sr-only">消费截图预览</DialogTitle>
                             <img src={form.screenshot_url} alt="消费截图" className="max-w-full max-h-[75vh] object-contain rounded" />
                           </DialogContent>
                         </Dialog>

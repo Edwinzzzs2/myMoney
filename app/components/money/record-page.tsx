@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { Clock3, Edit3, Receipt, RefreshCcw, Sparkles } from 'lucide-react'
+import { Clock3, Edit3, Receipt, Sparkles } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
@@ -14,11 +14,8 @@ type RecordPageProps = {
   totals: Totals
   todayExpenses: Expense[]
   manualForm: ReactNode
-  loading: boolean
   analyzing: boolean
-  username?: string
   invoiceLabelMap: Record<string, string>
-  onReload: () => void
   onManualRecord: () => void
   onOpenTextSmartDialog: () => void
   onGoHistory: () => void
@@ -31,11 +28,8 @@ export function RecordPage({
   totals,
   todayExpenses,
   manualForm,
-  loading,
   analyzing,
-  username,
   invoiceLabelMap,
-  onReload,
   onManualRecord,
   onOpenTextSmartDialog,
   onGoHistory,
@@ -44,57 +38,41 @@ export function RecordPage({
   onQuickStatus,
 }: RecordPageProps) {
   return (
-    <div className="mx-auto max-w-[390px] space-y-3.5 pb-1 pt-0 lg:max-w-3xl">
-      <div className="flex items-start justify-between gap-3 pt-1">
-        <div>
-          <p className="text-[0.68rem] font-bold uppercase tracking-[0.22em] text-emerald-600 dark:text-emerald-300">Travel Ledger</p>
-          <h2 className="mt-1 text-[1.55rem] font-semibold leading-8 tracking-normal text-slate-950 dark:text-white">
-            记账 {username ? <span className="ml-2 text-base font-normal text-slate-500">欢迎，{username}</span> : null}
-          </h2>
+    <div className="pb-1">
+      <div className="px-4 pt-3.5 sm:px-6 lg:px-8">
+        <div className="mx-auto max-w-[390px] space-y-3.5 lg:max-w-3xl">
+          <SummaryStrip totals={totals} />
+
+          <div className="grid grid-cols-2 gap-2">
+            <Button type="button" variant="outline" className="h-10 rounded-md border-slate-200 bg-white/80 font-semibold text-emerald-700 shadow-sm dark:border-white/10 dark:bg-white/[0.06] dark:text-emerald-300" onClick={onManualRecord}>
+              <Edit3 className="h-4 w-4" />
+              手动记账
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              className="h-10 rounded-md border-slate-200 bg-white/80 font-semibold text-slate-700 shadow-sm dark:border-white/10 dark:bg-white/[0.06] dark:text-slate-100"
+              onClick={onOpenTextSmartDialog}
+              disabled={analyzing}
+            >
+              <Sparkles className="h-4 w-4 text-emerald-600 dark:text-emerald-300" />
+              智能记账
+            </Button>
+          </div>
+
+          <div className="block">{manualForm}</div>
+
+          <TodayList
+            totals={totals}
+            todayExpenses={todayExpenses}
+            onGoHistory={onGoHistory}
+            onEditExpense={onEditExpense}
+            onDeleteExpense={onDeleteExpense}
+            onQuickStatus={onQuickStatus}
+            invoiceLabelMap={invoiceLabelMap}
+          />
         </div>
-        <Button
-          type="button"
-          variant="outline"
-          size="icon"
-          className="h-9 w-9 rounded-lg border-slate-200/80 bg-white/80 text-slate-700 shadow-[0_8px_18px_rgba(15,23,42,0.08)] backdrop-blur dark:border-white/10 dark:bg-white/[0.06] dark:text-white"
-          onClick={onReload}
-          aria-label="同步"
-          title="同步"
-        >
-          <RefreshCcw className={cn('h-4 w-4', loading && 'animate-spin')} />
-        </Button>
       </div>
-
-      <SummaryStrip totals={totals} />
-
-      <div className="grid grid-cols-2 gap-2">
-        <Button type="button" variant="outline" className="h-10 rounded-md border-slate-200 bg-white/80 font-semibold text-emerald-700 shadow-sm dark:border-white/10 dark:bg-white/[0.06] dark:text-emerald-300" onClick={onManualRecord}>
-          <Edit3 className="h-4 w-4" />
-          手动记账
-        </Button>
-        <Button
-          type="button"
-          variant="outline"
-          className="h-10 rounded-md border-slate-200 bg-white/80 font-semibold text-slate-700 shadow-sm dark:border-white/10 dark:bg-white/[0.06] dark:text-slate-100"
-          onClick={onOpenTextSmartDialog}
-          disabled={analyzing}
-        >
-          <Sparkles className="h-4 w-4 text-emerald-600 dark:text-emerald-300" />
-          智能记账
-        </Button>
-      </div>
-
-      <div className="block">{manualForm}</div>
-
-      <TodayList
-        totals={totals}
-        todayExpenses={todayExpenses}
-        onGoHistory={onGoHistory}
-        onEditExpense={onEditExpense}
-        onDeleteExpense={onDeleteExpense}
-        onQuickStatus={onQuickStatus}
-        invoiceLabelMap={invoiceLabelMap}
-      />
     </div>
   )
 }

@@ -4,6 +4,7 @@
 import type { ReactNode } from 'react'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { DatePicker } from '@/components/ui/date-picker'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { formatVoiceTime } from '@/app/components/money/money-utils'
@@ -235,7 +236,12 @@ export function SmartDialog({
                 </select>
               </Field>
               <Field label="日期">
-                <Input type="date" value={smartDraft.expense_date} onChange={(event) => onPatchSmartDraft({ expense_date: event.target.value })} className="h-10" />
+                <DatePicker
+                  value={smartDraft.expense_date}
+                  onChange={(expenseDate) => onPatchSmartDraft({ expense_date: expenseDate })}
+                  className="h-10 bg-white text-sm dark:bg-black/20"
+                  ariaLabel="选择智能记账日期"
+                />
               </Field>
               <Field label="发票">
                 <select value={smartDraft.invoice_status} onChange={(event) => onPatchSmartDraft({ invoice_status: event.target.value })} className="field-input h-10">

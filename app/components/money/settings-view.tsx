@@ -112,8 +112,6 @@ export function SettingsView({
 }: SettingsViewProps) {
   return (
     <div className="mx-auto max-w-[430px] space-y-4 lg:max-w-5xl">
-      <h2 className="text-2xl font-semibold tracking-normal text-slate-950 dark:text-white">设置</h2>
-
       <Card className="rounded-lg border-slate-200/80 bg-white/80 p-4 shadow-[0_10px_24px_rgba(15,23,42,0.06)] backdrop-blur dark:border-white/10 dark:bg-white/[0.045] dark:shadow-none">
         <div className="flex items-center gap-3">
           <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-emerald-100 text-emerald-700 dark:bg-emerald-400/15 dark:text-emerald-300">

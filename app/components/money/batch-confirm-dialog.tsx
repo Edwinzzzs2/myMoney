@@ -33,7 +33,7 @@ export function BatchConfirmDialog({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/35 px-3 pb-[max(env(safe-area-inset-bottom),0.75rem)] pt-[max(env(safe-area-inset-top),0.75rem)] backdrop-blur-sm dark:bg-black/65 sm:items-center sm:p-6"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/35 px-3 pb-[max(env(safe-area-inset-bottom),0.75rem)] pt-[max(env(safe-area-inset-top),0.75rem)] backdrop-blur-sm dark:bg-black/65 sm:p-6"
       role="dialog"
       aria-modal="true"
       aria-label="确认批量修改"

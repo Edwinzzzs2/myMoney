@@ -10,10 +10,12 @@ import { LoginScreen } from '@/app/components/money/login-screen'
 import { HistoryView } from '@/app/components/money/history-view'
 import { SettingsView } from '@/app/components/money/settings-view'
 import { SettingsPanelDrawer } from '@/app/components/money/settings-panel'
+import { ExpenseFormSheet } from '@/app/components/money/expense-form-sheet'
+import { ConfirmActionDialog } from '@/app/components/money/confirm-action-dialog'
 import { BatchConfirmDialog } from '@/app/components/money/batch-confirm-dialog'
 import { SmartDialog } from '@/app/components/money/smart-dialog'
-import { DesktopNav, BottomNav } from '@/app/components/money/nav'
-import { Button } from '@/components/ui/button'
+import { DesktopNav, BottomNav, MoneyTopBar } from '@/app/components/money/nav'
+import { toast } from 'sonner'
 import type {
   AiParsedExpense,
   BootstrapData,
@@ -49,10 +51,17 @@ import {
   downloadBlob,
   safeFileName,
 } from '@/app/components/money/file-utils'
-import { Loader2, X } from 'lucide-react'
+import { Loader2 } from 'lucide-react'
 
 type HistoryFilter = 'all' | 'invoice' | 'reimbursement' | 'reimbursed'
 type BatchReimbursementStatus = 'pending' | 'reimbursed'
+type ConfirmActionState = {
+  title: string
+  description: string
+  confirmLabel: string
+  tone?: 'danger' | 'warning'
+  onConfirm: () => Promise<void>
+}
 const preferredTripStorageKey = 'myMoney.preferredTripId'
 
 export function MoneyApp() {
@@ -66,11 +75,14 @@ export function MoneyApp() {
   const [accountInvoiceStatuses, setAccountInvoiceStatuses] = useState<InvoiceStatus[]>([])
   const [expenses, setExpenses] = useState<Expense[]>([])
   const [form, setForm] = useState<ExpenseFormState>(makeBlankForm())
+  const [editingExpenseForm, setEditingExpenseForm] = useState<ExpenseFormState | null>(null)
   const [search, setSearch] = useState('')
   const [historyFilter, setHistoryFilter] = useState<HistoryFilter>('all')
   const [batchSelecting, setBatchSelecting] = useState(false)
   const [selectedExpenseIds, setSelectedExpenseIds] = useState<string[]>([])
   const [batchConfirmStatus, setBatchConfirmStatus] = useState<BatchReimbursementStatus | null>(null)
+  const [confirmAction, setConfirmAction] = useState<ConfirmActionState | null>(null)
+  const [confirmActionPending, setConfirmActionPending] = useState(false)
   const [settingsPanel, setSettingsPanel] = useState<SettingsPanel>(null)
   const [user, setUser] = useState<{ id: string; username: string } | null>(null)
   const [authLoading, setAuthLoading] = useState(true)
@@ -101,7 +113,6 @@ export function MoneyApp() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [exportingDoc, setExportingDoc] = useState(false)
-  const [error, setError] = useState('')
   const [smartOpen, setSmartOpen] = useState(false)
   const [smartMode, setSmartMode] = useState<SmartMode>('text')
   const [smartText, setSmartText] = useState('')
@@ -115,6 +126,25 @@ export function MoneyApp() {
   const voiceSessionStartTextRef = useRef('')
   const voiceRecognizedTextRef = useRef('')
   const voiceManualEditedRef = useRef(false)
+
+  function setError(message: string) {
+    if (!message) {
+      toast.dismiss('app-error')
+      return
+    }
+    toast.error(message, { id: 'app-error' })
+  }
+
+  async function executeConfirmAction() {
+    if (!confirmAction || confirmActionPending) return
+    setConfirmActionPending(true)
+    try {
+      await confirmAction.onConfirm()
+      setConfirmAction(null)
+    } finally {
+      setConfirmActionPending(false)
+    }
+  }
 
   const activeCategories = useMemo(() => categories.filter((item) => item.is_active), [categories])
   const archivedCategories = useMemo(() => categories.filter((item) => !item.is_active), [categories])
@@ -337,8 +367,18 @@ export function MoneyApp() {
     }
   }
 
-  async function handleAdminDeleteUser(targetUserId: string) {
-    if (!window.confirm('确定要删除该用户吗？该操作将同时清空该用户的所有账单、分类和行程数据，且不可恢复！')) return
+  async function handleAdminDeleteUser(targetUserId: string, confirmed = false) {
+    if (!confirmed) {
+      const targetUsername = adminUsers.find((item) => item.id === targetUserId)?.username || '该用户'
+      setConfirmAction({
+        title: `删除用户「${targetUsername}」？`,
+        description: '该用户的全部账单、分类和行程数据将同时删除，且无法恢复。',
+        confirmLabel: '确认删除',
+        onConfirm: () => handleAdminDeleteUser(targetUserId, true),
+      })
+      return
+    }
+
     try {
       const res = await fetch('/api/admin/users', {
         method: 'DELETE',
@@ -348,8 +388,9 @@ export function MoneyApp() {
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || '删除用户失败')
       fetchAdminUsers()
+      toast.success(`已删除用户「${adminUsers.find((item) => item.id === targetUserId)?.username || targetUserId}」`)
     } catch (err: any) {
-      alert(friendlyErrorMessage(err, '删除失败'))
+      setError(friendlyErrorMessage(err, '删除失败'))
     }
   }
 
@@ -357,6 +398,11 @@ export function MoneyApp() {
   function patchForm(patch: Partial<ExpenseFormState>) {
     if (patch.trip_id !== undefined) rememberPreferredTripId(patch.trip_id)
     setForm((current) => ({ ...current, ...patch }))
+  }
+
+  function patchEditingExpenseForm(patch: Partial<ExpenseFormState>) {
+    if (patch.trip_id !== undefined) rememberPreferredTripId(patch.trip_id)
+    setEditingExpenseForm((current) => (current ? { ...current, ...patch } : current))
   }
 
   function patchSmartDraft(patch: Partial<ExpenseFormState>) {
@@ -427,6 +473,7 @@ export function MoneyApp() {
   async function saveExpense(event?: FormEvent) {
     event?.preventDefault()
     const nextTripId = form.trip_id || getPreferredTripId(trips)
+    const wasEditing = Boolean(form.id)
     setSaving(true)
     setError('')
     try {
@@ -436,6 +483,7 @@ export function MoneyApp() {
         body: JSON.stringify(formToPayload(form)),
       })
       await loadData()
+      toast.success(wasEditing ? '账单已保存' : '账单添加成功')
       setForm(makeAccountBlankForm(activeCategories[0]?.id || '', nextTripId))
       setSmartDraft(null)
       setSmartText('')
@@ -448,7 +496,7 @@ export function MoneyApp() {
   }
 
   function editExpense(expense: Expense) {
-    setForm({
+    setEditingExpenseForm({
       id: expense.id,
       trip_id: expense.trip_id || '',
       category_id: expense.category_id || '',
@@ -464,15 +512,45 @@ export function MoneyApp() {
       receipt_url: expense.receipt_url || '',
       screenshot_url: expense.screenshot_url || '',
     })
-    setActiveTab('record')
   }
 
-  async function deleteExpense(expense: Expense) {
-    if (!window.confirm(`危险操作：将永久删除「${expense.title}」这笔账单，删除后无法恢复。\n\n金额：${formatMoney(expense.amount)}\n日期：${expense.expense_date}\n\n确定继续删除？`)) return
+  async function saveEditedExpense(event?: FormEvent) {
+    event?.preventDefault()
+    if (!editingExpenseForm?.id) return
+
+    setSaving(true)
+    setError('')
+    try {
+      await fetchJson<Expense>(`/api/expenses/${editingExpenseForm.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(formToPayload(editingExpenseForm)),
+      })
+      await loadData()
+      toast.success(`已保存「${editingExpenseForm.title}」`)
+      setEditingExpenseForm(null)
+    } catch (e: any) {
+      setError(friendlyErrorMessage(e, '保存失败'))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function deleteExpense(expense: Expense, confirmed = false) {
+    if (!confirmed) {
+      setConfirmAction({
+        title: `删除账单「${expense.title}」？`,
+        description: `金额：${formatMoney(expense.amount)}\n日期：${expense.expense_date}\n删除后无法恢复。`,
+        confirmLabel: '确认删除',
+        onConfirm: () => deleteExpense(expense, true),
+      })
+      return
+    }
+
     setError('')
     try {
       await fetchJson(`/api/expenses/${expense.id}`, { method: 'DELETE' })
       setExpenses((current) => current.filter((item) => item.id !== expense.id))
+      toast.success(`已删除「${expense.title}」`)
     } catch (e: any) {
       setError(friendlyErrorMessage(e, '删除失败'))
     }
@@ -566,13 +644,24 @@ export function MoneyApp() {
     }
   }
 
-  async function disableCategory(category: Category) {
-    if (!window.confirm(`停用「${category.name}」分类？历史账单会保留。`)) return
+  async function disableCategory(category: Category, confirmed = false) {
+    if (!confirmed) {
+      setConfirmAction({
+        title: `停用分类「${category.name}」？`,
+        description: '该分类将不再用于新账单，历史账单会保留。',
+        confirmLabel: '确认停用',
+        tone: 'warning',
+        onConfirm: () => disableCategory(category, true),
+      })
+      return
+    }
+
     setSaving(true)
     setError('')
     try {
       await fetchJson(`/api/categories/${category.id}`, { method: 'DELETE' })
       await loadData()
+      toast.success(`已停用分类「${category.name}」`)
     } catch (e: any) {
       setError(friendlyErrorMessage(e, '停用分类失败'))
     } finally {
@@ -580,15 +669,25 @@ export function MoneyApp() {
     }
   }
 
-  async function deleteArchivedCategory(category: Category) {
+  async function deleteArchivedCategory(category: Category, confirmed = false) {
     const usageCount = expenses.filter((e) => e.category_id === category.id).length
     if (usageCount > 0) return
-    if (!window.confirm(`彻底删除「${category.name}」分类？此操作无法恢复。`)) return
+    if (!confirmed) {
+      setConfirmAction({
+        title: `删除分类「${category.name}」？`,
+        description: '该分类将被彻底删除，且无法恢复。',
+        confirmLabel: '确认删除',
+        onConfirm: () => deleteArchivedCategory(category, true),
+      })
+      return
+    }
+
     setSaving(true)
     setError('')
     try {
       await fetchJson(`/api/categories/${category.id}?hard=1`, { method: 'DELETE' })
       await loadData()
+      toast.success(`已删除分类「${category.name}」`)
     } catch (e: any) {
       setError(friendlyErrorMessage(e, '删除归档分类失败'))
     } finally {
@@ -634,13 +733,24 @@ export function MoneyApp() {
     setTripForm({ name: '', destination: '', start_date: '', end_date: '', budget: '' })
   }
 
-  async function archiveTrip(trip: Trip) {
-    if (!window.confirm(`归档「${trip.name}」行程？历史账单会保留。`)) return
+  async function archiveTrip(trip: Trip, confirmed = false) {
+    if (!confirmed) {
+      setConfirmAction({
+        title: `归档行程「${trip.name}」？`,
+        description: '该行程将不再用于新账单，历史账单会保留。',
+        confirmLabel: '确认归档',
+        tone: 'warning',
+        onConfirm: () => archiveTrip(trip, true),
+      })
+      return
+    }
+
     setSaving(true)
     setError('')
     try {
       await fetchJson(`/api/trips/${trip.id}`, { method: 'DELETE' })
       await loadData()
+      toast.success(`已归档行程「${trip.name}」`)
     } catch (e: any) {
       setError(friendlyErrorMessage(e, '归档行程失败'))
     } finally {
@@ -648,15 +758,25 @@ export function MoneyApp() {
     }
   }
 
-  async function deleteArchivedTrip(trip: Trip) {
+  async function deleteArchivedTrip(trip: Trip, confirmed = false) {
     const usageCount = expenses.filter((e) => e.trip_id === trip.id).length
     if (usageCount > 0) return
-    if (!window.confirm(`彻底删除「${trip.name}」行程？此操作无法恢复。`)) return
+    if (!confirmed) {
+      setConfirmAction({
+        title: `删除行程「${trip.name}」？`,
+        description: '该行程将被彻底删除，且无法恢复。',
+        confirmLabel: '确认删除',
+        onConfirm: () => deleteArchivedTrip(trip, true),
+      })
+      return
+    }
+
     setSaving(true)
     setError('')
     try {
       await fetchJson(`/api/trips/${trip.id}?hard=1`, { method: 'DELETE' })
       await loadData()
+      toast.success(`已删除行程「${trip.name}」`)
     } catch (e: any) {
       setError(friendlyErrorMessage(e, '删除归档行程失败'))
     } finally {
@@ -697,15 +817,28 @@ export function MoneyApp() {
     setPaymentMethodForm('')
   }
 
-  async function deletePaymentMethod(method: PaymentMethod) {
+  async function deletePaymentMethod(method: PaymentMethod, confirmed = false) {
     const usageCount = expenses.filter((e) => e.payment_method === method.name).length
     const actionText = usageCount > 0 ? '停用' : '删除'
-    if (!window.confirm(`${actionText}「${method.name}」支付方式？${usageCount > 0 ? `它已被 ${usageCount} 笔账单使用，历史账单会保留原支付方式。` : '此操作无法恢复。'}`)) return
+    if (!confirmed) {
+      setConfirmAction({
+        title: `${actionText}支付方式「${method.name}」？`,
+        description: usageCount > 0
+          ? `该支付方式已被 ${usageCount} 笔账单使用，历史账单会保留原支付方式。`
+          : '该支付方式将被彻底删除，且无法恢复。',
+        confirmLabel: `确认${actionText}`,
+        tone: usageCount > 0 ? 'warning' : 'danger',
+        onConfirm: () => deletePaymentMethod(method, true),
+      })
+      return
+    }
+
     setSaving(true)
     setError('')
     try {
       await fetchJson(`/api/payment-methods/${method.id}${usageCount === 0 ? '?hard=1' : ''}`, { method: 'DELETE' })
       await loadData()
+      toast.success(`已${actionText}支付方式「${method.name}」`)
     } catch (e: any) {
       setError(friendlyErrorMessage(e, `${actionText}支付方式失败`))
     } finally {
@@ -746,15 +879,28 @@ export function MoneyApp() {
     setInvoiceStatusForm('')
   }
 
-  async function deleteInvoiceStatus(status: InvoiceStatus) {
+  async function deleteInvoiceStatus(status: InvoiceStatus, confirmed = false) {
     const usageCount = expenses.filter((e) => e.invoice_status === status.value).length
     const actionText = usageCount > 0 ? '停用' : '删除'
-    if (!window.confirm(`${actionText}「${status.label}」发票状态？${usageCount > 0 ? `它已被 ${usageCount} 笔账单使用，历史账单会保留原发票状态。` : '此操作无法恢复。'}`)) return
+    if (!confirmed) {
+      setConfirmAction({
+        title: `${actionText}发票状态「${status.label}」？`,
+        description: usageCount > 0
+          ? `该状态已被 ${usageCount} 笔账单使用，历史账单会保留原发票状态。`
+          : '该发票状态将被彻底删除，且无法恢复。',
+        confirmLabel: `确认${actionText}`,
+        tone: usageCount > 0 ? 'warning' : 'danger',
+        onConfirm: () => deleteInvoiceStatus(status, true),
+      })
+      return
+    }
+
     setSaving(true)
     setError('')
     try {
       await fetchJson(`/api/invoice-statuses/${status.id}${usageCount === 0 ? '?hard=1' : ''}`, { method: 'DELETE' })
       await loadData()
+      toast.success(`已${actionText}发票状态「${status.label}」`)
     } catch (e: any) {
       setError(friendlyErrorMessage(e, `${actionText}发票状态失败`))
     } finally {
@@ -763,9 +909,18 @@ export function MoneyApp() {
   }
 
   // ─── 历史清空 ─────────────────────────────────────────────
-  async function clearHistory() {
+  async function clearHistory(confirmed = false) {
     if (!expenses.length) return
-    if (!window.confirm('确定清空全部历史账单？分类与行程会保留。')) return
+    if (!confirmed) {
+      setConfirmAction({
+        title: '清空全部历史账单？',
+        description: `将永久删除当前全部 ${expenses.length} 笔账单，分类与行程会保留。`,
+        confirmLabel: '确认清空',
+        onConfirm: () => clearHistory(true),
+      })
+      return
+    }
+
     setSaving(true)
     setError('')
     try {
@@ -773,6 +928,7 @@ export function MoneyApp() {
       setExpenses([])
       setSearch('')
       setHistoryFilter('all')
+      toast.success('历史账单已清空')
     } catch (e: any) {
       setError(friendlyErrorMessage(e, '清空历史失败'))
     } finally {
@@ -982,6 +1138,7 @@ export function MoneyApp() {
         body: JSON.stringify(formToPayload(smartDraft)),
       })
       await loadData()
+      toast.success('账单添加成功')
       setForm(makeAccountBlankForm(activeCategories[0]?.id || '', getPreferredTripId(trips)))
       setSmartDraft(null)
       setSmartText('')
@@ -1165,102 +1322,104 @@ export function MoneyApp() {
   }
 
   return (
-    <main className="fixed inset-0 overflow-hidden bg-[#f6f7f4] text-[#161a17] dark:bg-[#070a12] dark:text-white">
+    <main className="fixed inset-0 flex flex-col overflow-hidden bg-[#f6f7f4] pt-[env(safe-area-inset-top)] text-[#161a17] dark:bg-[#070a12] dark:text-white">
       <div className="pointer-events-none fixed inset-0 bg-[linear-gradient(180deg,#fffdf8_0%,#f3f6f1_48%,#eef3f8_100%)] dark:bg-[radial-gradient(circle_at_20%_0%,rgba(45,212,191,0.18),transparent_30%),radial-gradient(circle_at_78%_12%,rgba(91,140,255,0.18),transparent_28%),linear-gradient(145deg,#070a12_0%,#0b1020_55%,#070a12_100%)]" />
-      <div className="relative mx-auto grid h-full min-h-0 max-w-[1440px] grid-cols-1 lg:grid-cols-[270px_minmax(0,1fr)_390px]">
+      <div className="relative mx-auto grid min-h-0 w-full max-w-[1440px] flex-1 grid-cols-1 lg:grid-cols-[270px_minmax(0,1fr)_390px]">
         <DesktopNav activeTab={activeTab} setActiveTab={setActiveTab} totals={totals} />
 
-        <section className="min-h-0 min-w-0 overflow-y-auto px-4 pb-[calc(6.25rem+env(safe-area-inset-bottom))] pt-[max(env(safe-area-inset-top),1rem)] custom-scrollbar sm:px-6 lg:h-full lg:px-8 lg:pb-8 lg:pt-7">
-          {error ? (
-            <div className="mb-3 flex items-center justify-between rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-100">
-              <span>{error}</span>
-              <Button type="button" variant="ghost" size="icon" className="h-7 w-7 hover:bg-red-100 dark:hover:bg-white/10" onClick={() => setError('')} aria-label="关闭错误">
-                <X className="h-4 w-4" />
-              </Button>
-            </div>
-          ) : null}
+        <div className="flex min-h-0 min-w-0 flex-col">
+          <MoneyTopBar
+            activeTab={activeTab}
+            username={user?.username}
+            loading={loading}
+            batchSelecting={batchSelecting}
+            onReload={loadData}
+            onToggleBatchSelecting={() => (batchSelecting ? exitBatchSelection() : setBatchSelecting(true))}
+          />
 
-          {activeTab === 'record' ? (
-            <RecordPage
-              totals={totals}
-              todayExpenses={todayExpenses}
-              manualForm={manualForm}
-              loading={loading}
-              analyzing={analyzing}
-              username={user?.username}
-              invoiceLabelMap={invoiceLabelMap}
-              onReload={loadData}
-              onManualRecord={focusManualForm}
-              onOpenTextSmartDialog={openTextSmartDialog}
-              onGoHistory={() => setActiveTab('history')}
-              onEditExpense={editExpense}
-              onDeleteExpense={deleteExpense}
-              onQuickStatus={quickStatus}
-            />
-          ) : null}
+          <section className="min-h-0 min-w-0 flex-1 overflow-y-auto pb-[calc(6.25rem+env(safe-area-inset-bottom))] custom-scrollbar lg:pb-8">
+            {activeTab === 'record' ? (
+              <RecordPage
+                totals={totals}
+                todayExpenses={todayExpenses}
+                manualForm={manualForm}
+                analyzing={analyzing}
+                invoiceLabelMap={invoiceLabelMap}
+                onManualRecord={focusManualForm}
+                onOpenTextSmartDialog={openTextSmartDialog}
+                onGoHistory={() => setActiveTab('history')}
+                onEditExpense={editExpense}
+                onDeleteExpense={deleteExpense}
+                onQuickStatus={quickStatus}
+              />
+            ) : null}
 
-          {activeTab === 'stats' ? <StatsPage expenses={expenses} activeCategories={activeCategories} trips={trips} /> : null}
+            {activeTab === 'stats' ? (
+              <div className="px-4 pt-4 sm:px-6 lg:px-8 lg:pt-7">
+                <StatsPage expenses={expenses} activeCategories={activeCategories} trips={trips} />
+              </div>
+            ) : null}
 
-          {activeTab === 'history' ? (
-            <HistoryView
-              groupedExpenses={groupedExpenses}
-              filteredExpenses={filteredExpenses}
-              search={search}
-              historyFilter={historyFilter}
-              batchSelecting={batchSelecting}
-              selectedExpenseIdSet={selectedExpenseIdSet}
-              selectedExpenses={selectedExpenses}
-              selectedExpenseTotal={selectedExpenseTotal}
-              allFilteredExpensesSelected={allFilteredExpensesSelected}
-              loading={loading}
-              saving={saving}
-              invoiceLabelMap={invoiceLabelMap}
-              onSearchChange={setSearch}
-              onFilterChange={setHistoryFilter}
-              onToggleBatchSelecting={() => (batchSelecting ? exitBatchSelection() : setBatchSelecting(true))}
-              onToggleFilteredExpenseSelection={toggleFilteredExpenseSelection}
-              onToggleExpenseSelection={toggleExpenseSelection}
-              onRequestBatchUpdate={requestBatchUpdateReimbursementStatus}
-              onReload={loadData}
-              onEditExpense={editExpense}
-              onDeleteExpense={deleteExpense}
-              onQuickStatus={quickStatus}
-            />
-          ) : null}
+            {activeTab === 'history' ? (
+              <HistoryView
+                groupedExpenses={groupedExpenses}
+                filteredExpenses={filteredExpenses}
+                search={search}
+                historyFilter={historyFilter}
+                batchSelecting={batchSelecting}
+                selectedExpenseIdSet={selectedExpenseIdSet}
+                selectedExpenses={selectedExpenses}
+                selectedExpenseTotal={selectedExpenseTotal}
+                allFilteredExpensesSelected={allFilteredExpensesSelected}
+                saving={saving}
+                invoiceLabelMap={invoiceLabelMap}
+                onSearchChange={setSearch}
+                onFilterChange={setHistoryFilter}
+                onToggleFilteredExpenseSelection={toggleFilteredExpenseSelection}
+                onToggleExpenseSelection={toggleExpenseSelection}
+                onRequestBatchUpdate={requestBatchUpdateReimbursementStatus}
+                onEditExpense={editExpense}
+                onDeleteExpense={deleteExpense}
+                onQuickStatus={quickStatus}
+              />
+            ) : null}
 
-          {activeTab === 'settings' ? (
-            <SettingsView
-              user={user}
-              isDark={isDark}
-              settingsPanel={settingsPanel}
-              activeCategories={activeCategories}
-              trips={trips}
-              exportTrips={exportTrips}
-              activePaymentMethods={activePaymentMethods}
-              activeInvoiceStatuses={activeInvoiceStatuses}
-              archivedItemCount={archivedItemCount}
-              adminUsers={adminUsers}
-              exportingDoc={exportingDoc}
-              onSetSettingsPanel={setSettingsPanel}
-              onToggleTheme={(dark) => setTheme(dark ? 'dark' : 'light')}
-              onClearHistory={clearHistory}
-              onExportTripDoc={exportTripDoc}
-              onLogout={handleLogout}
-              onOpenUserPanel={() => {
-                setSettingsPanel('profile')
-                setOldPassword('')
-                setNewPassword('')
-                setConfirmPassword('')
-                setPwdError('')
-                setPwdSuccess('')
-                setShowOldPassword(false)
-                setShowNewPassword(false)
-                setShowConfirmPassword(false)
-              }}
-              onOpenUsersPanel={() => { setSettingsPanel('users'); fetchAdminUsers() }}
-            />
-          ) : null}
-        </section>
+            {activeTab === 'settings' ? (
+              <div className="px-4 pt-4 sm:px-6 lg:px-8 lg:pt-7">
+                <SettingsView
+                  user={user}
+                  isDark={isDark}
+                  settingsPanel={settingsPanel}
+                  activeCategories={activeCategories}
+                  trips={trips}
+                  exportTrips={exportTrips}
+                  activePaymentMethods={activePaymentMethods}
+                  activeInvoiceStatuses={activeInvoiceStatuses}
+                  archivedItemCount={archivedItemCount}
+                  adminUsers={adminUsers}
+                  exportingDoc={exportingDoc}
+                  onSetSettingsPanel={setSettingsPanel}
+                  onToggleTheme={(dark) => setTheme(dark ? 'dark' : 'light')}
+                  onClearHistory={clearHistory}
+                  onExportTripDoc={exportTripDoc}
+                  onLogout={handleLogout}
+                  onOpenUserPanel={() => {
+                    setSettingsPanel('profile')
+                    setOldPassword('')
+                    setNewPassword('')
+                    setConfirmPassword('')
+                    setPwdError('')
+                    setPwdSuccess('')
+                    setShowOldPassword(false)
+                    setShowNewPassword(false)
+                    setShowConfirmPassword(false)
+                  }}
+                  onOpenUsersPanel={() => { setSettingsPanel('users'); fetchAdminUsers() }}
+                />
+              </div>
+            ) : null}
+          </section>
+        </div>
 
         <aside className="hidden h-full overflow-y-auto border-l border-slate-200/80 bg-white/90 px-5 py-7 custom-scrollbar dark:border-white/10 dark:bg-white/[0.035] lg:block">
           <ManualExpenseForm
@@ -1279,6 +1438,30 @@ export function MoneyApp() {
       </div>
 
       <BottomNav activeTab={activeTab} setActiveTab={setActiveTab} />
+
+      <ExpenseFormSheet
+        open={Boolean(editingExpenseForm)}
+        onOpenChange={(open) => {
+          if (!open) setEditingExpenseForm(null)
+        }}
+      >
+        {editingExpenseForm ? (
+          <ManualExpenseForm
+            activeCategories={activeCategories}
+            trips={trips}
+            paymentMethods={activePaymentMethods}
+            invoiceStatuses={activeInvoiceStatuses}
+            form={editingExpenseForm}
+            saving={saving}
+            formId="edit-expense-form"
+            showHeader={false}
+            className="border-0 bg-transparent p-0 shadow-none backdrop-blur-none dark:bg-transparent lg:p-0"
+            onPatchForm={patchEditingExpenseForm}
+            onSaveExpense={saveEditedExpense}
+            onResetForm={() => setEditingExpenseForm(null)}
+          />
+        ) : null}
+      </ExpenseFormSheet>
 
       <SettingsPanelDrawer
         settingsPanel={settingsPanel}
@@ -1350,6 +1533,21 @@ export function MoneyApp() {
         onAdminResetPassword={handleAdminResetPassword}
         onAdminDeleteUser={handleAdminDeleteUser}
         onClose={() => setSettingsPanel(null)}
+      />
+
+      <ConfirmActionDialog
+        open={Boolean(confirmAction)}
+        title={confirmAction?.title || ''}
+        description={confirmAction?.description || ''}
+        confirmLabel={confirmAction?.confirmLabel || '确认'}
+        tone={confirmAction?.tone}
+        pending={confirmActionPending}
+        onOpenChange={(open) => {
+          if (!open) setConfirmAction(null)
+        }}
+        onConfirm={() => {
+          void executeConfirmAction()
+        }}
       />
 
       <BatchConfirmDialog

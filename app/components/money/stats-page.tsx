@@ -148,9 +148,8 @@ export function StatsPage({ expenses, activeCategories, trips }: StatsPageProps)
 
   return (
     <div className="mx-auto max-w-[430px] space-y-3.5 lg:max-w-5xl">
-      {/* 标题 + 月份选择器 */}
-      <div className="flex items-center justify-between gap-3">
-        <h2 className="text-2xl font-semibold tracking-normal text-slate-950 dark:text-white">统计</h2>
+      {/* 月份选择器 */}
+      <div className="flex items-center justify-end">
         <div className="flex items-center gap-1">
           <Button
             type="button"

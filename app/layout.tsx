@@ -2,6 +2,7 @@ import './globals.css'
 import type { Metadata, Viewport } from 'next'
 import type { ReactNode } from 'react'
 import { ThemeProvider } from '@/components/theme-provider'
+import { Toaster } from '@/components/ui/sonner'
 import { PwaRegister } from '@/app/components/pwa/pwa-register'
 
 export const metadata: Metadata = {
@@ -25,7 +26,7 @@ export const viewport: Viewport = {
   maximumScale: 1,
   userScalable: false,
   themeColor: [
-    { media: '(prefers-color-scheme: light)', color: '#f7f8fb' },
+    { media: '(prefers-color-scheme: light)', color: '#fffdf8' },
     { media: '(prefers-color-scheme: dark)', color: '#070a12' },
   ],
   viewportFit: 'cover',
@@ -39,6 +40,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
       <body className="min-h-screen overflow-hidden bg-background text-foreground antialiased">
         <ThemeProvider attribute="class" defaultTheme="light" enableSystem>
           {children}
+          <Toaster />
         </ThemeProvider>
         <PwaRegister />
       </body>

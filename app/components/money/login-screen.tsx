@@ -79,11 +79,17 @@ export function LoginScreen({ onLogin }: { onLogin: () => void }) {
             </div>
           </div>
 
-          {error && <p className="text-sm font-medium text-red-500">{error}</p>}
+          <p className="min-h-5 text-sm font-medium text-red-500" aria-live="polite">
+            {error}
+          </p>
 
           <Button type="submit" className="h-11 w-full bg-emerald-600 hover:bg-emerald-700 dark:bg-emerald-500 dark:hover:bg-emerald-600" disabled={loading || !username || !password}>
-            {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-            {isLogin ? '登录' : '注册'}
+            <span className="relative inline-flex items-center justify-center">
+              <span className="absolute right-full mr-2 flex h-4 w-4 items-center justify-center">
+                {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+              </span>
+              {isLogin ? '登录' : '注册'}
+            </span>
           </Button>
 
           <div className="mt-4 text-center">

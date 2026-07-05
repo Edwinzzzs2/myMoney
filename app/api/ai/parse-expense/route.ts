@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { getAuthenticatedUser } from '@/lib/auth'
+import { query } from '@/lib/db'
 import { friendlyErrorMessage } from '@/lib/errors'
 
 type CategoryInput = {
@@ -39,6 +41,41 @@ type ParsedExpense = {
 
 const allowedInvoiceStatus = new Set(['pending', 'received', 'none'])
 const allowedReimbursementStatus = new Set(['pending', 'reimbursed'])
+const defaultDailyLimit = 20
+
+function getDailyLimit() {
+  const configuredLimit = Number(process.env.AI_DAILY_LIMIT)
+  return Number.isInteger(configuredLimit) && configuredLimit > 0
+    ? configuredLimit
+    : defaultDailyLimit
+}
+
+function getShanghaiDate() {
+  const parts = new Intl.DateTimeFormat('en', {
+    timeZone: 'Asia/Shanghai',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(new Date())
+  const values = Object.fromEntries(parts.map((part) => [part.type, part.value]))
+  return `${values.year}-${values.month}-${values.day}`
+}
+
+async function consumeDailyUsage(userId: string, dailyLimit: number) {
+  const rows = await query(
+    `INSERT INTO my_money_ai_daily_usage (user_id, usage_date, usage_count)
+     VALUES ($1, $2::date, 1)
+     ON CONFLICT (user_id, usage_date)
+     DO UPDATE SET
+       usage_count = my_money_ai_daily_usage.usage_count + 1,
+       updated_at = now()
+     WHERE my_money_ai_daily_usage.usage_count < $3
+     RETURNING usage_count`,
+    [userId, getShanghaiDate(), dailyLimit]
+  )
+
+  return rows[0] ? Number(rows[0].usage_count) : null
+}
 
 function getChatCompletionsUrl(baseUrl: string) {
   const trimmed = baseUrl.trim().replace(/\/+$/, '')
@@ -94,8 +131,6 @@ function normalizeParsedExpense(raw: ParsedExpense, request: Required<Pick<Parse
   }
 }
 
-import { getAuthenticatedUser } from '@/lib/auth'
-
 export async function POST(req: NextRequest) {
   const user = await getAuthenticatedUser()
   if (!user) return NextResponse.json({ message: '请先登录后再操作。' }, { status: 401 })
@@ -119,6 +154,7 @@ export async function POST(req: NextRequest) {
   const categories = body.categories || []
   const trips = body.trips || []
   const endpoint = getChatCompletionsUrl(baseUrl)
+  const dailyLimit = getDailyLimit()
 
   const systemPrompt =
     '你是出差报销记账助手。把用户口述的中文账单解析为 JSON。只返回 JSON，不要解释。' +
@@ -153,6 +189,14 @@ export async function POST(req: NextRequest) {
   })
 
   try {
+    const usageCount = await consumeDailyUsage(user.userId, dailyLimit)
+    if (usageCount === null) {
+      return NextResponse.json(
+        { message: `今天的智能记账次数已用完（每天最多 ${dailyLimit} 次），请明天再试。` },
+        { status: 429 }
+      )
+    }
+
     const requestBody = {
       model,
       temperature: 0.1,
@@ -191,7 +235,12 @@ export async function POST(req: NextRequest) {
     }
 
     const parsed = normalizeParsedExpense(extractJson(content), { ...body, text, today, now })
-    return NextResponse.json(parsed)
+    return NextResponse.json(parsed, {
+      headers: {
+        'X-AI-Daily-Limit': String(dailyLimit),
+        'X-AI-Daily-Remaining': String(Math.max(dailyLimit - usageCount, 0)),
+      },
+    })
   } catch (e: any) {
     return NextResponse.json({ message: friendlyErrorMessage(e, '智能解析异常') }, { status: 502 })
   }

@@ -135,8 +135,11 @@ function decodeDataUrl(value: string): { bytes: Uint8Array; mime: string } | nul
 
 function buildDocumentXml(trip: TripForExport, receiptImages: ExportImage[], screenshotImages: ExportImage[]) {
   const bodyParts: string[] = []
-  appendImageRows(bodyParts, receiptImages)
-  appendImageRows(bodyParts, screenshotImages)
+  appendReceiptRows(bodyParts, receiptImages)
+  if (receiptImages.length && screenshotImages.length) {
+    bodyParts.push(buildSpacerParagraph())
+  }
+  appendScreenshotRows(bodyParts, screenshotImages)
 
   return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture">
@@ -152,38 +155,100 @@ function buildDocumentXml(trip: TripForExport, receiptImages: ExportImage[], scr
 </w:document>`
 }
 
-function appendImageRows(parts: string[], images: ExportImage[]) {
-  for (let index = 0; index < images.length;) {
-    const current = images[index]
-    const next = images[index + 1]
-
-    if (isPortraitLike(current) && next && isPortraitLike(next)) {
-      parts.push(buildImageParagraph([current, next]))
-      index += 2
-      continue
-    }
-
-    parts.push(buildImageParagraph([current]))
-    index += 1
+function appendReceiptRows(parts: string[], images: ExportImage[]) {
+  for (const image of images) {
+    parts.push(buildReceiptParagraph(image))
   }
 }
 
-function buildImageParagraph(images: ExportImage[]) {
-  const runs = images
-    .map((image) => {
-      const size = images.length > 1
-        ? fitImage(image, 7.0, 11.6)
-        : fitImage(image, isPortraitLike(image) ? 7.2 : 15.8, isPortraitLike(image) ? 11.8 : 11.2)
-      return buildDrawingRun(image, size.widthCm, size.heightCm)
-    })
-    .join('<w:r><w:t xml:space="preserve">  </w:t></w:r>')
+function appendScreenshotRows(parts: string[], images: ExportImage[]) {
+  for (let index = 0; index < images.length; index += 2) {
+    parts.push(buildScreenshotTableRow(images.slice(index, index + 2)))
+  }
+}
+
+function buildReceiptParagraph(image: ExportImage) {
+  const size = fitImage(image, isPortraitLike(image) ? 7.2 : 15.8, isPortraitLike(image) ? 11.8 : 11.2)
 
   return `<w:p>
       <w:pPr>
         <w:jc w:val="center"/>
         <w:spacing w:before="0" w:after="100" w:line="240" w:lineRule="auto"/>
       </w:pPr>
-      ${runs}
+      ${buildDrawingRun(image, size.widthCm, size.heightCm)}
+    </w:p>`
+}
+
+function buildScreenshotTableRow(images: ExportImage[]) {
+  const cells = [images[0], images[1]].map((image) => buildScreenshotCell(image)).join('')
+
+  return `<w:tbl>
+      <w:tblPr>
+        <w:tblW w:w="7920" w:type="dxa"/>
+        <w:jc w:val="center"/>
+        <w:tblCellMar>
+          <w:top w:w="0" w:type="dxa"/>
+          <w:left w:w="60" w:type="dxa"/>
+          <w:bottom w:w="0" w:type="dxa"/>
+          <w:right w:w="60" w:type="dxa"/>
+        </w:tblCellMar>
+        <w:tblBorders>
+          <w:top w:val="nil"/>
+          <w:left w:val="nil"/>
+          <w:bottom w:val="nil"/>
+          <w:right w:val="nil"/>
+          <w:insideH w:val="nil"/>
+          <w:insideV w:val="nil"/>
+        </w:tblBorders>
+        <w:tblLayout w:type="fixed"/>
+      </w:tblPr>
+      <w:tblGrid>
+        <w:gridCol w:w="3960"/>
+        <w:gridCol w:w="3960"/>
+      </w:tblGrid>
+      <w:tr>
+        ${cells}
+      </w:tr>
+    </w:tbl>
+    <w:p>
+      <w:pPr>
+        <w:spacing w:before="0" w:after="100" w:line="240" w:lineRule="auto"/>
+      </w:pPr>
+    </w:p>`
+}
+
+function buildScreenshotCell(image?: ExportImage) {
+  if (!image) {
+    return `<w:tc>
+          <w:tcPr>
+            <w:tcW w:w="3960" w:type="dxa"/>
+            <w:vAlign w:val="top"/>
+          </w:tcPr>
+          <w:p/>
+        </w:tc>`
+  }
+
+  const size = fitImage(image, 6.9, 12.0)
+  return `<w:tc>
+          <w:tcPr>
+            <w:tcW w:w="3960" w:type="dxa"/>
+            <w:vAlign w:val="top"/>
+          </w:tcPr>
+          <w:p>
+            <w:pPr>
+              <w:jc w:val="center"/>
+              <w:spacing w:before="0" w:after="0" w:line="240" w:lineRule="auto"/>
+            </w:pPr>
+            ${buildDrawingRun(image, size.widthCm, size.heightCm)}
+          </w:p>
+        </w:tc>`
+}
+
+function buildSpacerParagraph() {
+  return `<w:p>
+      <w:pPr>
+        <w:spacing w:before="120" w:after="120" w:line="240" w:lineRule="auto"/>
+      </w:pPr>
     </w:p>`
 }
 

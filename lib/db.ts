@@ -170,6 +170,16 @@ async function ensureInitialized() {
         ')'
     )
 
+    await p.query(
+      'CREATE TABLE IF NOT EXISTS my_money_ai_daily_usage (\n' +
+        '  user_id BIGINT NOT NULL REFERENCES my_money_users(id) ON DELETE CASCADE,\n' +
+        '  usage_date DATE NOT NULL,\n' +
+        '  usage_count INT NOT NULL DEFAULT 0 CHECK (usage_count >= 0),\n' +
+        '  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),\n' +
+        '  PRIMARY KEY (user_id, usage_date)\n' +
+        ')'
+    )
+
     // Add user_id column if it doesn't exist (for migration)
     await p.query('ALTER TABLE my_money_categories ADD COLUMN IF NOT EXISTS user_id BIGINT REFERENCES my_money_users(id) ON DELETE CASCADE')
     await p.query('ALTER TABLE my_money_trips ADD COLUMN IF NOT EXISTS user_id BIGINT REFERENCES my_money_users(id) ON DELETE CASCADE')

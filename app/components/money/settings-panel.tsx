@@ -471,10 +471,6 @@ export function SettingsPanelDrawer({
               <form onSubmit={onSaveTrip} className="space-y-2 rounded-lg border border-slate-200/80 bg-white/70 p-3 dark:border-white/10 dark:bg-black/15">
                 <Input value={tripForm.name} onChange={(event) => onTripFormChange({ ...tripForm, name: event.target.value })} placeholder="行程名称" className="h-10" />
                 <Input value={tripForm.destination} onChange={(event) => onTripFormChange({ ...tripForm, destination: event.target.value })} placeholder="目的地（可选）" className="h-10" />
-                <div className="grid grid-cols-2 gap-2">
-                  <Input type="date" value={tripForm.start_date} onChange={(event) => onTripFormChange({ ...tripForm, start_date: event.target.value })} className="h-10" />
-                  <Input type="date" value={tripForm.end_date} onChange={(event) => onTripFormChange({ ...tripForm, end_date: event.target.value })} className="h-10" />
-                </div>
                 <Input type="number" inputMode="decimal" min="0" step="0.01" value={tripForm.budget} onChange={(event) => onTripFormChange({ ...tripForm, budget: event.target.value })} placeholder="预算（可选）" className="h-10" />
                 <div className="flex gap-2">
                   <Button type="submit" className="h-10 flex-1 bg-emerald-600 text-white hover:bg-emerald-700" disabled={saving || !tripForm.name.trim()}>
