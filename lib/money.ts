@@ -22,6 +22,12 @@ export const categorySelect =
 export const tripSelect =
   'SELECT id::text, name, destination, to_char(start_date, \'YYYY-MM-DD\') AS start_date, to_char(end_date, \'YYYY-MM-DD\') AS end_date, budget::float AS budget, status, created_at, updated_at FROM my_money_trips'
 
+export const paymentMethodSelect =
+  'SELECT id::text, name, sort_order, is_active, created_at, updated_at FROM my_money_payment_methods'
+
+export const invoiceStatusSelect =
+  'SELECT id::text, value, label, sort_order, is_active, created_at, updated_at FROM my_money_invoice_statuses'
+
 export const expenseSelect =
   'SELECT e.id::text, e.trip_id::text, e.category_id::text, e.amount::float AS amount, e.currency, e.title, e.merchant, ' +
   'to_char(e.expense_date, \'YYYY-MM-DD\') AS expense_date, to_char(e.expense_time, \'HH24:MI\') AS expense_time, ' +
@@ -69,14 +75,16 @@ export function normalizeExpensePayload(data: ExpensePayload) {
 }
 
 export async function getBootstrapData(userId: string) {
-  const [categories, trips, archivedTrips, expenses] = await Promise.all([
+  const [categories, trips, archivedTrips, paymentMethods, invoiceStatuses, expenses] = await Promise.all([
     query(`${categorySelect} WHERE user_id = $1 ORDER BY sort_order ASC, id ASC`, [userId]),
     query(`${tripSelect} WHERE user_id = $1 AND status <> 'archived' ORDER BY created_at DESC, id DESC`, [userId]),
     query(`${tripSelect} WHERE user_id = $1 AND status = 'archived' ORDER BY updated_at DESC, id DESC`, [userId]),
+    query(`${paymentMethodSelect} WHERE user_id = $1 ORDER BY sort_order ASC, id ASC`, [userId]),
+    query(`${invoiceStatusSelect} WHERE user_id = $1 ORDER BY sort_order ASC, id ASC`, [userId]),
     query(`${expenseSelect} WHERE e.user_id = $1 ORDER BY e.expense_date DESC, e.created_at DESC, e.id DESC`, [userId]),
   ])
 
-  return { categories, trips, archivedTrips, expenses }
+  return { categories, trips, archivedTrips, paymentMethods, invoiceStatuses, expenses }
 }
 
 export function buildSummary(expenses: any[]) {

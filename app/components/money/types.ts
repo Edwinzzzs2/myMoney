@@ -19,6 +19,21 @@ export type Trip = {
   status: string
 }
 
+export type PaymentMethod = {
+  id: string
+  name: string
+  sort_order: number
+  is_active: boolean
+}
+
+export type InvoiceStatus = {
+  id: string
+  value: string
+  label: string
+  sort_order: number
+  is_active: boolean
+}
+
 export type Expense = {
   id: string
   trip_id: string | null
@@ -46,6 +61,8 @@ export type BootstrapData = {
   categories: Category[]
   trips: Trip[]
   archivedTrips: Trip[]
+  paymentMethods: PaymentMethod[]
+  invoiceStatuses: InvoiceStatus[]
   expenses: Expense[]
 }
 

@@ -17,6 +17,7 @@ type RecordPageProps = {
   loading: boolean
   analyzing: boolean
   username?: string
+  invoiceLabelMap: Record<string, string>
   onReload: () => void
   onManualRecord: () => void
   onOpenTextSmartDialog: () => void
@@ -33,6 +34,7 @@ export function RecordPage({
   loading,
   analyzing,
   username,
+  invoiceLabelMap,
   onReload,
   onManualRecord,
   onOpenTextSmartDialog,
@@ -91,6 +93,7 @@ export function RecordPage({
         onEditExpense={onEditExpense}
         onDeleteExpense={onDeleteExpense}
         onQuickStatus={onQuickStatus}
+        invoiceLabelMap={invoiceLabelMap}
       />
     </div>
   )
@@ -124,6 +127,7 @@ function TodayList({
   onEditExpense,
   onDeleteExpense,
   onQuickStatus,
+  invoiceLabelMap,
 }: {
   totals: Totals
   todayExpenses: Expense[]
@@ -131,6 +135,7 @@ function TodayList({
   onEditExpense: (expense: Expense) => void
   onDeleteExpense: (expense: Expense) => void
   onQuickStatus: (expense: Expense, status: string) => void
+  invoiceLabelMap: Record<string, string>
 }) {
   const previewExpenses = todayExpenses.slice(0, 2)
 
@@ -146,7 +151,7 @@ function TodayList({
         {todayExpenses.length ? (
           previewExpenses.map((expense, index) => (
             <div key={expense.id} className={cn(index > 0 && 'border-t border-slate-200/80 dark:border-white/10')}>
-              <ExpenseRow expense={expense} compact onEdit={onEditExpense} onDelete={onDeleteExpense} onQuickStatus={onQuickStatus} />
+              <ExpenseRow expense={expense} compact invoiceLabelMap={invoiceLabelMap} onEdit={onEditExpense} onDelete={onDeleteExpense} onQuickStatus={onQuickStatus} />
             </div>
           ))
         ) : (

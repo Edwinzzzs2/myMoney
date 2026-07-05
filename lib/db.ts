@@ -16,6 +16,17 @@ const defaultCategories = [
   { name: '其他', icon: 'more', color: '#94a3b8', sort_order: 7 },
 ]
 
+const defaultPaymentMethods = ['个人垫付', '公司卡', '微信', '支付宝', '银行卡', '现金'].map((name, index) => ({
+  name,
+  sort_order: index,
+}))
+
+const defaultInvoiceStatuses = [
+  { value: 'pending', label: '待开票', sort_order: 0 },
+  { value: 'received', label: '已开票', sort_order: 1 },
+  { value: 'none', label: '无发票', sort_order: 2 },
+]
+
 function getPool() {
   if (pool) return pool
   const host = process.env.DB_HOST
@@ -72,6 +83,31 @@ async function ensureInitialized() {
     )
 
     await p.query(
+      'CREATE TABLE IF NOT EXISTS my_money_payment_methods (\n' +
+        '  id BIGSERIAL PRIMARY KEY,\n' +
+        '  user_id BIGINT NOT NULL REFERENCES my_money_users(id) ON DELETE CASCADE,\n' +
+        '  name VARCHAR(80) NOT NULL,\n' +
+        '  sort_order INT NOT NULL DEFAULT 0,\n' +
+        '  is_active BOOLEAN NOT NULL DEFAULT TRUE,\n' +
+        '  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),\n' +
+        '  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()\n' +
+        ')'
+    )
+
+    await p.query(
+      'CREATE TABLE IF NOT EXISTS my_money_invoice_statuses (\n' +
+        '  id BIGSERIAL PRIMARY KEY,\n' +
+        '  user_id BIGINT NOT NULL REFERENCES my_money_users(id) ON DELETE CASCADE,\n' +
+        '  value VARCHAR(64) NOT NULL,\n' +
+        '  label VARCHAR(80) NOT NULL,\n' +
+        '  sort_order INT NOT NULL DEFAULT 0,\n' +
+        '  is_active BOOLEAN NOT NULL DEFAULT TRUE,\n' +
+        '  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),\n' +
+        '  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()\n' +
+        ')'
+    )
+
+    await p.query(
       'CREATE TABLE IF NOT EXISTS my_money_expenses (\n' +
         '  id BIGSERIAL PRIMARY KEY,\n' +
         '  trip_id BIGINT REFERENCES my_money_trips(id) ON DELETE SET NULL,\n' +
@@ -102,6 +138,10 @@ async function ensureInitialized() {
     await p.query('ALTER TABLE my_money_categories DROP CONSTRAINT IF EXISTS my_money_categories_name_key')
     await p.query('ALTER TABLE my_money_categories DROP CONSTRAINT IF EXISTS unique_category_name_per_user')
     await p.query('ALTER TABLE my_money_categories ADD CONSTRAINT unique_category_name_per_user UNIQUE (user_id, name)')
+    await p.query('ALTER TABLE my_money_payment_methods DROP CONSTRAINT IF EXISTS unique_payment_method_per_user')
+    await p.query('ALTER TABLE my_money_payment_methods ADD CONSTRAINT unique_payment_method_per_user UNIQUE (user_id, name)')
+    await p.query('ALTER TABLE my_money_invoice_statuses DROP CONSTRAINT IF EXISTS unique_invoice_status_per_user')
+    await p.query('ALTER TABLE my_money_invoice_statuses ADD CONSTRAINT unique_invoice_status_per_user UNIQUE (user_id, value)')
 
     await p.query('CREATE INDEX IF NOT EXISTS idx_my_money_expenses_date ON my_money_expenses(expense_date DESC)')
     await p.query('CREATE INDEX IF NOT EXISTS idx_my_money_expenses_trip ON my_money_expenses(trip_id)')
@@ -110,6 +150,8 @@ async function ensureInitialized() {
     await p.query('CREATE INDEX IF NOT EXISTS idx_my_money_categories_user ON my_money_categories(user_id)')
     await p.query('CREATE INDEX IF NOT EXISTS idx_my_money_trips_user ON my_money_trips(user_id)')
     await p.query('CREATE INDEX IF NOT EXISTS idx_my_money_expenses_user ON my_money_expenses(user_id)')
+    await p.query('CREATE INDEX IF NOT EXISTS idx_my_money_payment_methods_user ON my_money_payment_methods(user_id)')
+    await p.query('CREATE INDEX IF NOT EXISTS idx_my_money_invoice_statuses_user ON my_money_invoice_statuses(user_id)')
 
     // Ensure there is a default admin user if none exists
     const adminCheck = await p.query("SELECT id FROM my_money_users WHERE username = 'admin'")
@@ -150,7 +192,23 @@ async function ensureInitialized() {
       )
     }
 
-    const tables = ['my_money_users', 'my_money_categories', 'my_money_trips', 'my_money_expenses']
+    const usersForDefaults = await p.query('SELECT id FROM my_money_users')
+    for (const row of usersForDefaults.rows) {
+      for (const method of defaultPaymentMethods) {
+        await p.query(
+          'INSERT INTO my_money_payment_methods (user_id, name, sort_order) VALUES ($1, $2, $3) ON CONFLICT (user_id, name) DO NOTHING',
+          [row.id, method.name, method.sort_order]
+        )
+      }
+      for (const status of defaultInvoiceStatuses) {
+        await p.query(
+          'INSERT INTO my_money_invoice_statuses (user_id, value, label, sort_order) VALUES ($1, $2, $3, $4) ON CONFLICT (user_id, value) DO NOTHING',
+          [row.id, status.value, status.label, status.sort_order]
+        )
+      }
+    }
+
+    const tables = ['my_money_users', 'my_money_categories', 'my_money_trips', 'my_money_payment_methods', 'my_money_invoice_statuses', 'my_money_expenses']
     for (const table of tables) {
       await p.query(
         `SELECT setval(
@@ -213,4 +271,17 @@ export async function initializeUserDefaultData(userId: string | number) {
     'INSERT INTO my_money_trips (user_id, name, destination, start_date, end_date, budget, status) VALUES ($1, $2, $3, CURRENT_DATE, CURRENT_DATE, $4, $5)',
     [userId, '默认出差', '待填写', 0, 'open']
   )
+  // 3. Insert account-scoped payment methods and invoice statuses
+  for (const method of defaultPaymentMethods) {
+    await p.query(
+      'INSERT INTO my_money_payment_methods (user_id, name, sort_order) VALUES ($1, $2, $3) ON CONFLICT (user_id, name) DO NOTHING',
+      [userId, method.name, method.sort_order]
+    )
+  }
+  for (const status of defaultInvoiceStatuses) {
+    await p.query(
+      'INSERT INTO my_money_invoice_statuses (user_id, value, label, sort_order) VALUES ($1, $2, $3, $4) ON CONFLICT (user_id, value) DO NOTHING',
+      [userId, status.value, status.label, status.sort_order]
+    )
+  }
 }

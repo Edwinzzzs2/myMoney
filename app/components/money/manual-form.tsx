@@ -8,12 +8,14 @@ import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
 import { cn } from '@/lib/utils'
 
-import type { Category, ExpenseFormState, Trip } from './types'
-import { getCategoryIcon, invoiceLabels, invoiceOptions, makeBlankForm, paymentMethods } from './money-utils'
+import type { Category, ExpenseFormState, InvoiceStatus, PaymentMethod, Trip } from './types'
+import { getCategoryIcon, makeBlankForm } from './money-utils'
 
 type ManualFormProps = {
   activeCategories: Category[]
   trips: Trip[]
+  paymentMethods: PaymentMethod[]
+  invoiceStatuses: InvoiceStatus[]
   form: ExpenseFormState
   saving: boolean
   compact?: boolean
@@ -26,6 +28,8 @@ type ManualFormProps = {
 export function ManualForm({
   activeCategories,
   trips,
+  paymentMethods,
+  invoiceStatuses,
   form,
   saving,
   compact = false,
@@ -37,6 +41,9 @@ export function ManualForm({
   const selectedCategory = activeCategories.find((category) => category.id === form.category_id)
   const CategoryIcon = getCategoryIcon(selectedCategory?.icon)
   const hasReceiptFile = form.receipt_url.startsWith('data:')
+  const hasCurrentPaymentMethod = paymentMethods.some((method) => method.name === form.payment_method)
+  const hasCurrentInvoiceStatus = invoiceStatuses.some((status) => status.value === form.invoice_status)
+  const receivedInvoiceStatus = invoiceStatuses.find((status) => status.value === 'received')?.value || form.invoice_status
 
   function handleReceiptFile(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0]
@@ -49,7 +56,7 @@ export function ManualForm({
     const reader = new FileReader()
     reader.onload = () => {
       const receiptUrl = typeof reader.result === 'string' ? reader.result : ''
-      if (receiptUrl) onPatchForm({ receipt_url: receiptUrl, invoice_status: 'received' })
+      if (receiptUrl) onPatchForm({ receipt_url: receiptUrl, invoice_status: receivedInvoiceStatus })
     }
     reader.readAsDataURL(file)
     event.target.value = ''
@@ -129,21 +136,29 @@ export function ManualForm({
 
         <FieldRow label="支付" icon={<CreditCard className="h-4 w-4" />}>
           <select value={form.payment_method} onChange={(event) => onPatchForm({ payment_method: event.target.value })} className="field-input h-10 border-slate-200 bg-slate-50 dark:border-white/10 dark:bg-black/20">
+            {!hasCurrentPaymentMethod && form.payment_method ? (
+              <option value={form.payment_method}>{form.payment_method}</option>
+            ) : null}
             {paymentMethods.map((method) => (
-              <option key={method} value={method}>
-                {method}
+              <option key={method.id} value={method.name}>
+                {method.name}
               </option>
             ))}
+            {!paymentMethods.length ? <option value="">暂无支付方式</option> : null}
           </select>
         </FieldRow>
 
         <FieldRow label="发票" icon={<Receipt className="h-4 w-4" />}>
           <select value={form.invoice_status} onChange={(event) => onPatchForm({ invoice_status: event.target.value })} className="field-input h-10 border-slate-200 bg-slate-50 dark:border-white/10 dark:bg-black/20">
-            {invoiceOptions.map((status) => (
-              <option key={status} value={status}>
-                {invoiceLabels[status]}
+            {!hasCurrentInvoiceStatus && form.invoice_status ? (
+              <option value={form.invoice_status}>{form.invoice_status}</option>
+            ) : null}
+            {invoiceStatuses.map((status) => (
+              <option key={status.id} value={status.value}>
+                {status.label}
               </option>
             ))}
+            {!invoiceStatuses.length ? <option value="">暂无发票状态</option> : null}
           </select>
         </FieldRow>
 

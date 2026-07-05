@@ -5,21 +5,23 @@ import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 
 import type { Expense } from './types'
-import { formatMoneyCompact, getCategoryIcon, invoiceLabels, reimbursementLabels } from './money-utils'
+import { formatMoneyCompact, getCategoryIcon, invoiceLabels as defaultInvoiceLabels, reimbursementLabels } from './money-utils'
 
 type ExpenseRowProps = {
   expense: Expense
   compact?: boolean
   showActions?: boolean
+  invoiceLabelMap?: Record<string, string>
   onEdit: (expense: Expense) => void
   onDelete: (expense: Expense) => void
   onQuickStatus: (expense: Expense, status: string) => void
 }
 
-export function ExpenseRow({ expense, compact = false, showActions = false, onEdit, onDelete, onQuickStatus }: ExpenseRowProps) {
+export function ExpenseRow({ expense, compact = false, showActions = false, invoiceLabelMap, onEdit, onDelete, onQuickStatus }: ExpenseRowProps) {
   const Icon = getCategoryIcon(expense.category_icon)
   const isPending = expense.reimbursement_status === 'pending'
   const reimbursementLabel = reimbursementLabels[expense.reimbursement_status] || expense.reimbursement_status
+  const invoiceLabel = invoiceLabelMap?.[expense.invoice_status] || defaultInvoiceLabels[expense.invoice_status] || expense.invoice_status
   const nextReimbursementStatus = isPending ? 'reimbursed' : 'pending'
 
   return (
@@ -59,7 +61,7 @@ export function ExpenseRow({ expense, compact = false, showActions = false, onEd
                       : 'bg-amber-100 text-amber-800 dark:bg-amber-300/15 dark:text-amber-200'
                   )}
                 >
-                  {invoiceLabels[expense.invoice_status] || expense.invoice_status}
+                  {invoiceLabel}
                 </Badge>
                 <Button
                   type="button"

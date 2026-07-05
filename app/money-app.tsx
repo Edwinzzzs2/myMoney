@@ -21,6 +21,8 @@ import type {
   CategoryFormState,
   Expense,
   ExpenseFormState,
+  InvoiceStatus,
+  PaymentMethod,
   SmartMode,
   TabKey,
   Trip,
@@ -35,11 +37,10 @@ import {
   formatVoiceTime,
   getCategoryIcon,
   iconMap,
-  invoiceLabels,
-  invoiceOptions,
+  invoiceLabels as defaultInvoiceLabels,
   makeBlankForm,
   nowTime,
-  paymentMethods,
+  paymentMethods as defaultPaymentMethods,
   reimbursementLabels,
   tabs,
   todayISO,
@@ -50,7 +51,6 @@ import {
   CheckCircle2,
   ChevronRight,
   CreditCard,
-  Download,
   Eye,
   EyeOff,
   FileCheck2,
@@ -58,6 +58,7 @@ import {
   MapPin,
   Mic,
   Moon,
+  Pencil,
   Plus,
   RefreshCcw,
   Receipt,
@@ -74,7 +75,7 @@ import {
 import { cn } from '@/lib/utils'
 
 type HistoryFilter = 'all' | 'invoice' | 'reimbursement' | 'reimbursed'
-type SettingsPanel = 'profile' | 'categories' | 'trips' | 'archive' | 'payment' | 'invoice' | 'export' | 'users' | null
+type SettingsPanel = 'profile' | 'categories' | 'trips' | 'archive' | 'payment' | 'invoice' | 'users' | null
 type ZipFile = { name: string; data: Uint8Array }
 type CategoryIconValue = keyof typeof iconMap
 const preferredTripStorageKey = 'myMoney.preferredTripId'
@@ -97,6 +98,8 @@ export function MoneyApp() {
   const [categories, setCategories] = useState<Category[]>([])
   const [trips, setTrips] = useState<Trip[]>([])
   const [archivedTrips, setArchivedTrips] = useState<Trip[]>([])
+  const [accountPaymentMethods, setAccountPaymentMethods] = useState<PaymentMethod[]>([])
+  const [accountInvoiceStatuses, setAccountInvoiceStatuses] = useState<InvoiceStatus[]>([])
   const [expenses, setExpenses] = useState<Expense[]>([])
   const [form, setForm] = useState<ExpenseFormState>(makeBlankForm())
   const [search, setSearch] = useState('')
@@ -124,6 +127,11 @@ export function MoneyApp() {
   const [showAdminResetPassword, setShowAdminResetPassword] = useState(false)
   const [categoryForm, setCategoryForm] = useState<CategoryFormState>({ name: '', icon: 'more', color: '#94a3b8' })
   const [tripForm, setTripForm] = useState<TripFormState>({ name: '', destination: '', start_date: '', end_date: '', budget: '' })
+  const [editingTripId, setEditingTripId] = useState<string | null>(null)
+  const [paymentMethodForm, setPaymentMethodForm] = useState('')
+  const [editingPaymentMethodId, setEditingPaymentMethodId] = useState<string | null>(null)
+  const [invoiceStatusForm, setInvoiceStatusForm] = useState('')
+  const [editingInvoiceStatusId, setEditingInvoiceStatusId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
@@ -144,6 +152,15 @@ export function MoneyApp() {
   const activeCategories = useMemo(() => categories.filter((item) => item.is_active), [categories])
   const archivedCategories = useMemo(() => categories.filter((item) => !item.is_active), [categories])
   const archivedItemCount = archivedCategories.length + archivedTrips.length
+  const activePaymentMethods = useMemo(() => accountPaymentMethods.filter((item) => item.is_active), [accountPaymentMethods])
+  const activeInvoiceStatuses = useMemo(() => accountInvoiceStatuses.filter((item) => item.is_active), [accountInvoiceStatuses])
+  const invoiceLabelMap = useMemo(
+    () => ({
+      ...defaultInvoiceLabels,
+      ...Object.fromEntries(accountInvoiceStatuses.map((status) => [status.value, status.label])),
+    }),
+    [accountInvoiceStatuses]
+  )
 
   const totals = useMemo(() => {
     const currentDate = todayISO()
@@ -281,14 +298,22 @@ export function MoneyApp() {
       setUser(data.user)
       setAuthLoading(false)
       const preferredTripId = getPreferredTripId(data.trips)
+      const nextPaymentMethods = data.paymentMethods || []
+      const nextInvoiceStatuses = data.invoiceStatuses || []
+      const nextActivePaymentMethods = nextPaymentMethods.filter((item) => item.is_active)
+      const nextActiveInvoiceStatuses = nextInvoiceStatuses.filter((item) => item.is_active)
       setCategories(data.categories)
       setTrips(data.trips)
       setArchivedTrips(data.archivedTrips || [])
+      setAccountPaymentMethods(nextPaymentMethods)
+      setAccountInvoiceStatuses(nextInvoiceStatuses)
       setExpenses(data.expenses)
       setForm((current) => ({
         ...current,
         category_id: current.category_id || data.categories.find((item) => item.is_active)?.id || '',
         trip_id: data.trips.some((trip) => trip.id === current.trip_id) ? current.trip_id : preferredTripId,
+        payment_method: current.id ? current.payment_method : normalizePaymentMethod(current.payment_method, nextActivePaymentMethods),
+        invoice_status: current.id ? current.invoice_status : normalizeInvoiceStatus(current.invoice_status, nextActiveInvoiceStatuses),
       }))
     } catch (e: any) {
       if (e.message?.includes('401')) {
@@ -433,8 +458,37 @@ export function MoneyApp() {
     } catch {}
   }
 
+  function getDefaultPaymentMethod(nextMethods = activePaymentMethods) {
+    return nextMethods.find((method) => method.name === defaultPaymentMethods[0])?.name || nextMethods[0]?.name || defaultPaymentMethods[0] || ''
+  }
+
+  function getDefaultInvoiceStatus(nextStatuses = activeInvoiceStatuses) {
+    return nextStatuses.find((status) => status.value === 'pending')?.value || nextStatuses[0]?.value || 'pending'
+  }
+
+  function normalizePaymentMethod(value: string, nextMethods = activePaymentMethods) {
+    return nextMethods.some((method) => method.name === value) ? value : getDefaultPaymentMethod(nextMethods)
+  }
+
+  function normalizeInvoiceStatus(value: string, nextStatuses = activeInvoiceStatuses) {
+    return nextStatuses.some((status) => status.value === value) ? value : getDefaultInvoiceStatus(nextStatuses)
+  }
+
+  function makeAccountBlankForm(categoryId = activeCategories[0]?.id || '', tripId = getPreferredTripId(trips)) {
+    return {
+      ...makeBlankForm(categoryId, tripId),
+      payment_method: getDefaultPaymentMethod(),
+      invoice_status: getDefaultInvoiceStatus(),
+    }
+  }
+
   function resetFormWithPreferredTrip(nextForm: ExpenseFormState) {
-    setForm({ ...nextForm, trip_id: getPreferredTripId(trips) })
+    setForm({
+      ...nextForm,
+      trip_id: getPreferredTripId(trips),
+      payment_method: normalizePaymentMethod(nextForm.payment_method),
+      invoice_status: normalizeInvoiceStatus(nextForm.invoice_status),
+    })
   }
 
   function focusManualForm() {
@@ -460,7 +514,7 @@ export function MoneyApp() {
         body: JSON.stringify(formToPayload(form)),
       })
       await loadData()
-      setForm(makeBlankForm(activeCategories[0]?.id || '', nextTripId))
+      setForm(makeAccountBlankForm(activeCategories[0]?.id || '', nextTripId))
       setSmartDraft(null)
       setSmartText('')
       setSmartOpen(false)
@@ -556,17 +610,34 @@ export function MoneyApp() {
     setSaving(true)
     setError('')
     try {
-      await fetchJson<Trip>('/api/trips', {
-        method: 'POST',
+      await fetchJson<Trip>(editingTripId ? `/api/trips/${editingTripId}` : '/api/trips', {
+        method: editingTripId ? 'PATCH' : 'POST',
         body: JSON.stringify({ ...tripForm, name }),
       })
       setTripForm({ name: '', destination: '', start_date: '', end_date: '', budget: '' })
+      setEditingTripId(null)
       await loadData()
     } catch (e: any) {
       setError(e.message || '保存行程失败')
     } finally {
       setSaving(false)
     }
+  }
+
+  function beginEditTrip(trip: Trip) {
+    setEditingTripId(trip.id)
+    setTripForm({
+      name: trip.name,
+      destination: trip.destination || '',
+      start_date: trip.start_date || '',
+      end_date: trip.end_date || '',
+      budget: trip.budget ? String(trip.budget) : '',
+    })
+  }
+
+  function cancelEditTrip() {
+    setEditingTripId(null)
+    setTripForm({ name: '', destination: '', start_date: '', end_date: '', budget: '' })
   }
 
   async function archiveTrip(trip: Trip) {
@@ -610,6 +681,110 @@ export function MoneyApp() {
       await loadData()
     } catch (e: any) {
       setError(e.message || '删除归档行程失败')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function savePaymentMethod(event: FormEvent) {
+    event.preventDefault()
+    const name = paymentMethodForm.trim()
+    if (!name) return
+    const currentMethod = accountPaymentMethods.find((method) => method.id === editingPaymentMethodId)
+    setSaving(true)
+    setError('')
+    try {
+      await fetchJson<PaymentMethod>(editingPaymentMethodId ? `/api/payment-methods/${editingPaymentMethodId}` : '/api/payment-methods', {
+        method: editingPaymentMethodId ? 'PATCH' : 'POST',
+        body: JSON.stringify({
+          name,
+          sort_order: currentMethod?.sort_order ?? accountPaymentMethods.length,
+          is_active: true,
+        }),
+      })
+      setPaymentMethodForm('')
+      setEditingPaymentMethodId(null)
+      await loadData()
+    } catch (e: any) {
+      setError(e.message || '保存支付方式失败')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  function beginEditPaymentMethod(method: PaymentMethod) {
+    setEditingPaymentMethodId(method.id)
+    setPaymentMethodForm(method.name)
+  }
+
+  function cancelEditPaymentMethod() {
+    setEditingPaymentMethodId(null)
+    setPaymentMethodForm('')
+  }
+
+  async function deletePaymentMethod(method: PaymentMethod) {
+    const usageCount = getPaymentMethodUsageCount(method.name)
+    const actionText = usageCount > 0 ? '停用' : '删除'
+    if (!window.confirm(`${actionText}「${method.name}」支付方式？${usageCount > 0 ? `它已被 ${usageCount} 笔账单使用，历史账单会保留原支付方式。` : '此操作无法恢复。'}`)) return
+    setSaving(true)
+    setError('')
+    try {
+      await fetchJson(`/api/payment-methods/${method.id}${usageCount === 0 ? '?hard=1' : ''}`, { method: 'DELETE' })
+      await loadData()
+    } catch (e: any) {
+      setError(e.message || `${actionText}支付方式失败`)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function saveInvoiceStatus(event: FormEvent) {
+    event.preventDefault()
+    const label = invoiceStatusForm.trim()
+    if (!label) return
+    const currentStatus = accountInvoiceStatuses.find((status) => status.id === editingInvoiceStatusId)
+    setSaving(true)
+    setError('')
+    try {
+      await fetchJson<InvoiceStatus>(editingInvoiceStatusId ? `/api/invoice-statuses/${editingInvoiceStatusId}` : '/api/invoice-statuses', {
+        method: editingInvoiceStatusId ? 'PATCH' : 'POST',
+        body: JSON.stringify({
+          label,
+          sort_order: currentStatus?.sort_order ?? accountInvoiceStatuses.length,
+          is_active: true,
+        }),
+      })
+      setInvoiceStatusForm('')
+      setEditingInvoiceStatusId(null)
+      await loadData()
+    } catch (e: any) {
+      setError(e.message || '保存发票状态失败')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  function beginEditInvoiceStatus(status: InvoiceStatus) {
+    setEditingInvoiceStatusId(status.id)
+    setInvoiceStatusForm(status.label)
+  }
+
+  function cancelEditInvoiceStatus() {
+    setEditingInvoiceStatusId(null)
+    setInvoiceStatusForm('')
+  }
+
+  async function deleteInvoiceStatus(status: InvoiceStatus) {
+    const usageCount = getInvoiceStatusUsageCount(status.value)
+    const actionText = usageCount > 0 ? '停用' : '删除'
+    if (!window.confirm(`${actionText}「${status.label}」发票状态？${usageCount > 0 ? `它已被 ${usageCount} 笔账单使用，历史账单会保留原发票状态。` : '此操作无法恢复。'}`)) return
+    setSaving(true)
+    setError('')
+    try {
+      await fetchJson(`/api/invoice-statuses/${status.id}${usageCount === 0 ? '?hard=1' : ''}`, { method: 'DELETE' })
+      await loadData()
+    } catch (e: any) {
+      setError(e.message || `${actionText}发票状态失败`)
     } finally {
       setSaving(false)
     }
@@ -685,7 +860,8 @@ export function MoneyApp() {
       title: title || category?.name || '出差支出',
       expense_date: date,
       expense_time: nowTime(),
-      invoice_status: normalized.includes('无票') ? 'none' : normalized.includes('发票') || normalized.includes('开票') ? 'received' : 'pending',
+      payment_method: getDefaultPaymentMethod(),
+      invoice_status: normalizeInvoiceStatus(normalized.includes('无票') ? 'none' : normalized.includes('发票') || normalized.includes('开票') ? 'received' : 'pending'),
       note: normalized,
     }
   }
@@ -744,8 +920,8 @@ export function MoneyApp() {
       receipt_url: parsed.receipt_url || '',
       expense_date: parsed.expense_date || todayISO(),
       expense_time: parsed.expense_time || nowTime(),
-      payment_method: parsed.payment_method || '个人垫付',
-      invoice_status: parsed.invoice_status || 'pending',
+      payment_method: normalizePaymentMethod(parsed.payment_method || ''),
+      invoice_status: normalizeInvoiceStatus(parsed.invoice_status || ''),
       reimbursement_status: parsed.reimbursement_status || 'pending',
       reimbursable: parsed.reimbursable !== false,
     }
@@ -789,7 +965,7 @@ export function MoneyApp() {
         body: JSON.stringify(formToPayload(smartDraft)),
       })
       await loadData()
-      setForm(makeBlankForm(activeCategories[0]?.id || '', trips[0]?.id || ''))
+      setForm(makeAccountBlankForm(activeCategories[0]?.id || '', getPreferredTripId(trips)))
       setSmartDraft(null)
       setSmartText('')
       setSmartOpen(false)
@@ -922,6 +1098,14 @@ export function MoneyApp() {
     return expenses.filter((expense) => expense.trip_id === tripId).length
   }
 
+  function getPaymentMethodUsageCount(methodName: string) {
+    return expenses.filter((expense) => expense.payment_method === methodName).length
+  }
+
+  function getInvoiceStatusUsageCount(statusValue: string) {
+    return expenses.filter((expense) => expense.invoice_status === statusValue).length
+  }
+
   function getExportExpenses(tripId = exportTripId) {
     return tripId ? expenses.filter((expense) => expense.trip_id === tripId) : expenses
   }
@@ -953,7 +1137,7 @@ export function MoneyApp() {
         expense.merchant || '',
         expense.amount,
         expense.payment_method,
-        invoiceLabels[expense.invoice_status] || expense.invoice_status,
+        invoiceLabelMap[expense.invoice_status] || expense.invoice_status,
         reimbursementLabels[expense.reimbursement_status] || expense.reimbursement_status,
         expense.note || '',
         receiptPaths.get(expense.id) || '',
@@ -995,6 +1179,8 @@ export function MoneyApp() {
     <ManualExpenseForm
       activeCategories={activeCategories}
       trips={trips}
+      paymentMethods={activePaymentMethods}
+      invoiceStatuses={activeInvoiceStatuses}
       form={form}
       saving={saving}
       formId="manual-entry-form"
@@ -1042,6 +1228,7 @@ export function MoneyApp() {
               loading={loading}
               analyzing={analyzing}
               username={user?.username}
+              invoiceLabelMap={invoiceLabelMap}
               onReload={loadData}
               onManualRecord={focusManualForm}
               onOpenTextSmartDialog={openTextSmartDialog}
@@ -1060,6 +1247,8 @@ export function MoneyApp() {
           <ManualExpenseForm
             activeCategories={activeCategories}
             trips={trips}
+            paymentMethods={activePaymentMethods}
+            invoiceStatuses={activeInvoiceStatuses}
             form={form}
             saving={saving}
             compact
@@ -1128,7 +1317,7 @@ export function MoneyApp() {
                 </div>
                 <div className="divide-y divide-slate-200/80 dark:divide-white/10">
                   {list.map((expense) => (
-                    <ExpenseItemRow key={expense.id} expense={expense} compact showActions onEdit={editExpense} onDelete={deleteExpense} onQuickStatus={quickStatus} />
+                    <ExpenseItemRow key={expense.id} expense={expense} compact showActions invoiceLabelMap={invoiceLabelMap} onEdit={editExpense} onDelete={deleteExpense} onQuickStatus={quickStatus} />
                   ))}
                 </div>
               </Card>
@@ -1175,12 +1364,11 @@ export function MoneyApp() {
         <SettingGroup title="账本设置">
           <SettingRow icon={SlidersHorizontal} label="分类管理" detail={`${activeCategories.length} 个可用分类`} active={settingsPanel === 'categories'} onClick={() => setSettingsPanel('categories')} />
           <SettingRow icon={MapPin} label="行程管理" detail={`${trips.length} 个行程`} active={settingsPanel === 'trips'} onClick={() => setSettingsPanel('trips')} />
-          <SettingRow icon={CreditCard} label="支付方式" detail={`${paymentMethods.length} 种方式`} active={settingsPanel === 'payment'} onClick={() => setSettingsPanel('payment')} />
-          <SettingRow icon={FileCheck2} label="发票状态" detail="待开票 / 已开票 / 无发票" active={settingsPanel === 'invoice'} onClick={() => setSettingsPanel('invoice')} />
+          <SettingRow icon={CreditCard} label="支付方式" detail={`${activePaymentMethods.length} 种方式`} active={settingsPanel === 'payment'} onClick={() => setSettingsPanel('payment')} />
+          <SettingRow icon={FileCheck2} label="发票状态" detail={activeInvoiceStatuses.map((status) => status.label).join(' / ') || '暂无状态'} active={settingsPanel === 'invoice'} onClick={() => setSettingsPanel('invoice')} />
         </SettingGroup>
 
         <SettingGroup title="数据管理">
-          <SettingRow icon={Download} label="数据导出" detail="按行程导出 CSV / ZIP" active={settingsPanel === 'export'} onClick={() => setSettingsPanel('export')} />
           <SettingRow icon={Archive} label="归档数据" detail={`${archivedItemCount} 项归档`} active={settingsPanel === 'archive'} onClick={() => setSettingsPanel('archive')} />
           <SettingRow icon={Trash2} label="清空历史数据" danger detail="保留分类与行程" onClick={clearHistory} />
         </SettingGroup>
@@ -1273,11 +1461,8 @@ export function MoneyApp() {
       archive: '归档数据',
       payment: '支付方式',
       invoice: '发票状态',
-      export: '数据导出',
       users: '账户管理',
     }
-    const exportRows = getExportExpenses(exportTripId)
-    const exportReceiptCount = exportRows.filter((expense) => Boolean(expense.receipt_url)).length
 
     return (
       <div className="fixed inset-0 z-50 flex justify-end bg-slate-950/35 backdrop-blur-sm animate-in fade-in duration-200 dark:bg-black/65" role="dialog" aria-modal="true" aria-label={titleMap[settingsPanel]}>
@@ -1531,40 +1716,193 @@ export function MoneyApp() {
             {settingsPanel === 'trips' ? (
               <div className="space-y-3">
                 <MiniStat label="行程" value={`${trips.length} 个`} />
-          </div>
-        ) : null}
+                <form onSubmit={saveTrip} className="space-y-2 rounded-lg border border-slate-200/80 bg-white/70 p-3 dark:border-white/10 dark:bg-black/15">
+                  <Input value={tripForm.name} onChange={(event) => setTripForm((current) => ({ ...current, name: event.target.value }))} placeholder="行程名称" className="h-10" />
+                  <Input value={tripForm.destination} onChange={(event) => setTripForm((current) => ({ ...current, destination: event.target.value }))} placeholder="目的地（可选）" className="h-10" />
+                  <div className="grid grid-cols-2 gap-2">
+                    <Input type="date" value={tripForm.start_date} onChange={(event) => setTripForm((current) => ({ ...current, start_date: event.target.value }))} className="h-10" />
+                    <Input type="date" value={tripForm.end_date} onChange={(event) => setTripForm((current) => ({ ...current, end_date: event.target.value }))} className="h-10" />
+                  </div>
+                  <Input type="number" inputMode="decimal" min="0" step="0.01" value={tripForm.budget} onChange={(event) => setTripForm((current) => ({ ...current, budget: event.target.value }))} placeholder="预算（可选）" className="h-10" />
+                  <div className="flex gap-2">
+                    <Button type="submit" className="h-10 flex-1 bg-emerald-600 text-white hover:bg-emerald-700" disabled={saving || !tripForm.name.trim()}>
+                      <Plus className="h-4 w-4" />
+                      {editingTripId ? '保存行程' : '新增行程'}
+                    </Button>
+                    {editingTripId ? (
+                      <Button type="button" variant="outline" className="h-10 bg-white/70 dark:border-white/10 dark:bg-white/[0.045]" onClick={cancelEditTrip}>
+                        取消
+                      </Button>
+                    ) : null}
+                  </div>
+                </form>
 
-        {settingsPanel === 'export' ? (
-          <div className="space-y-3">
-            <label className="block">
-              <span className="mb-1.5 block text-xs font-medium text-slate-500 dark:text-slate-400">导出范围</span>
-              <select value={exportTripId} onChange={(event) => setExportTripId(event.target.value)} className="field-input h-10 border-slate-200 bg-slate-50 dark:border-white/10 dark:bg-black/20">
-                <option value="">全部行程</option>
-                {trips.map((trip) => (
-                  <option key={trip.id} value={trip.id}>
-                    {trip.name}
-                  </option>
-                ))}
-              </select>
-            </label>
+                <div className="grid gap-2">
+                  {trips.map((trip) => {
+                    const usageCount = getTripUsageCount(trip.id)
+                    return (
+                      <div key={trip.id} className="flex items-center gap-3 rounded-lg border border-slate-200/80 bg-white/70 px-3 py-2.5 dark:border-white/10 dark:bg-black/15">
+                        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-emerald-50 text-emerald-700 dark:bg-emerald-400/15 dark:text-emerald-200">
+                          <MapPin className="h-4 w-4" />
+                        </span>
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-sm font-medium">{trip.name}</span>
+                          <span className="block truncate text-xs text-slate-500 dark:text-slate-400">{trip.destination || '未设置目的地'} · {usageCount} 笔账单</span>
+                        </span>
+                        <Button type="button" variant="ghost" size="icon" className="h-8 w-8 text-slate-500" onClick={() => beginEditTrip(trip)} aria-label={`编辑${trip.name}`}>
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                        <Button type="button" variant="ghost" size="icon" className="h-8 w-8 text-slate-500" onClick={() => archiveTrip(trip)} aria-label={`归档${trip.name}`}>
+                          <Archive className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            ) : null}
 
-            <div className="grid grid-cols-2 gap-2">
-              <MiniStat label="账单" value={`${exportRows.length} 笔`} />
-              <MiniStat label="票据" value={`${exportReceiptCount} 个`} />
-            </div>
+            {settingsPanel === 'payment' ? (
+              <div className="space-y-3">
+                <MiniStat label="可用支付方式" value={`${activePaymentMethods.length} 种`} />
+                <form onSubmit={savePaymentMethod} className="space-y-2 rounded-lg border border-slate-200/80 bg-white/70 p-3 dark:border-white/10 dark:bg-black/15">
+                  <Input value={paymentMethodForm} onChange={(event) => setPaymentMethodForm(event.target.value)} placeholder="支付方式名称" className="h-10" />
+                  <div className="flex gap-2">
+                    <Button type="submit" className="h-10 flex-1 bg-emerald-600 text-white hover:bg-emerald-700" disabled={saving || !paymentMethodForm.trim()}>
+                      <Plus className="h-4 w-4" />
+                      {editingPaymentMethodId ? '保存方式' : '新增方式'}
+                    </Button>
+                    {editingPaymentMethodId ? (
+                      <Button type="button" variant="outline" className="h-10 bg-white/70 dark:border-white/10 dark:bg-white/[0.045]" onClick={cancelEditPaymentMethod}>
+                        取消
+                      </Button>
+                    ) : null}
+                  </div>
+                </form>
+                <div className="grid gap-2">
+                  {activePaymentMethods.map((method) => {
+                    const usageCount = getPaymentMethodUsageCount(method.name)
+                    return (
+                      <div key={method.id} className="flex items-center gap-3 rounded-lg border border-slate-200/80 bg-white/70 px-3 py-2.5 dark:border-white/10 dark:bg-black/15">
+                        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-blue-50 text-blue-700 dark:bg-blue-400/15 dark:text-blue-200">
+                          <CreditCard className="h-4 w-4" />
+                        </span>
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-sm font-medium">{method.name}</span>
+                          <span className="block truncate text-xs text-slate-500 dark:text-slate-400">{usageCount} 笔账单</span>
+                        </span>
+                        <Button type="button" variant="ghost" size="icon" className="h-8 w-8 text-slate-500" onClick={() => beginEditPaymentMethod(method)} aria-label={`编辑${method.name}`}>
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                        <Button type="button" variant="ghost" size="icon" className="h-8 w-8 text-slate-500" onClick={() => deletePaymentMethod(method)} aria-label={`${usageCount > 0 ? '停用' : '删除'}${method.name}`}>
+                          {usageCount > 0 ? <Archive className="h-4 w-4" /> : <Trash2 className="h-4 w-4" />}
+                        </Button>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            ) : null}
 
-            <div className="grid grid-cols-2 gap-2">
-              <Button type="button" variant="outline" className="h-10 bg-white/70 dark:border-white/10 dark:bg-white/[0.045]" onClick={() => exportCsv(exportTripId)}>
-                <Download className="h-4 w-4" />
-                CSV
-              </Button>
-              <Button type="button" className="h-10 bg-emerald-600 text-white hover:bg-emerald-700" onClick={() => exportZip(exportTripId)}>
-                <Download className="h-4 w-4" />
-                ZIP 含票据
-              </Button>
-            </div>
-          </div>
-        ) : null}
+            {settingsPanel === 'invoice' ? (
+              <div className="space-y-3">
+                <MiniStat label="可用发票状态" value={`${activeInvoiceStatuses.length} 个`} />
+                <form onSubmit={saveInvoiceStatus} className="space-y-2 rounded-lg border border-slate-200/80 bg-white/70 p-3 dark:border-white/10 dark:bg-black/15">
+                  <Input value={invoiceStatusForm} onChange={(event) => setInvoiceStatusForm(event.target.value)} placeholder="发票状态名称" className="h-10" />
+                  <div className="flex gap-2">
+                    <Button type="submit" className="h-10 flex-1 bg-emerald-600 text-white hover:bg-emerald-700" disabled={saving || !invoiceStatusForm.trim()}>
+                      <Plus className="h-4 w-4" />
+                      {editingInvoiceStatusId ? '保存状态' : '新增状态'}
+                    </Button>
+                    {editingInvoiceStatusId ? (
+                      <Button type="button" variant="outline" className="h-10 bg-white/70 dark:border-white/10 dark:bg-white/[0.045]" onClick={cancelEditInvoiceStatus}>
+                        取消
+                      </Button>
+                    ) : null}
+                  </div>
+                </form>
+                <div className="grid gap-2">
+                  {activeInvoiceStatuses.map((status) => {
+                    const usageCount = getInvoiceStatusUsageCount(status.value)
+                    return (
+                      <div key={status.id} className="flex items-center gap-3 rounded-lg border border-slate-200/80 bg-white/70 px-3 py-2.5 dark:border-white/10 dark:bg-black/15">
+                        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-amber-50 text-amber-700 dark:bg-amber-400/15 dark:text-amber-200">
+                          <FileCheck2 className="h-4 w-4" />
+                        </span>
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-sm font-medium">{status.label}</span>
+                          <span className="block truncate text-xs text-slate-500 dark:text-slate-400">{usageCount} 笔账单</span>
+                        </span>
+                        <Button type="button" variant="ghost" size="icon" className="h-8 w-8 text-slate-500" onClick={() => beginEditInvoiceStatus(status)} aria-label={`编辑${status.label}`}>
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                        <Button type="button" variant="ghost" size="icon" className="h-8 w-8 text-slate-500" onClick={() => deleteInvoiceStatus(status)} aria-label={`${usageCount > 0 ? '停用' : '删除'}${status.label}`}>
+                          {usageCount > 0 ? <Archive className="h-4 w-4" /> : <Trash2 className="h-4 w-4" />}
+                        </Button>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            ) : null}
+
+            {settingsPanel === 'archive' ? (
+              <div className="space-y-4">
+                <MiniStat label="归档数据" value={`${archivedItemCount} 项`} />
+
+                <section className="space-y-2">
+                  <h4 className="px-1 text-sm font-semibold text-slate-700 dark:text-slate-200">归档分类</h4>
+                  {archivedCategories.length ? (
+                    archivedCategories.map((category) => {
+                      const Icon = getCategoryIcon(category.icon)
+                      const usageCount = getCategoryUsageCount(category.id)
+                      return (
+                        <div key={category.id} className="flex items-center gap-3 rounded-lg border border-slate-200/80 bg-white/70 px-3 py-2.5 dark:border-white/10 dark:bg-black/15">
+                          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-white" style={{ backgroundColor: category.color }}>
+                            <Icon className="h-4 w-4" />
+                          </span>
+                          <span className="min-w-0 flex-1">
+                            <span className="block truncate text-sm font-medium">{category.name}</span>
+                            <span className="block truncate text-xs text-slate-500 dark:text-slate-400">{usageCount > 0 ? `已被 ${usageCount} 笔账单使用` : '未被使用，可删除'}</span>
+                          </span>
+                          <Button type="button" variant="ghost" size="icon" className="h-8 w-8 text-slate-500 disabled:opacity-35" onClick={() => deleteArchivedCategory(category)} disabled={usageCount > 0} aria-label={`删除归档分类${category.name}`}>
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      )
+                    })
+                  ) : (
+                    <EmptyState icon={Archive} title="没有归档分类" detail="停用分类后会显示在这里。" />
+                  )}
+                </section>
+
+                <section className="space-y-2">
+                  <h4 className="px-1 text-sm font-semibold text-slate-700 dark:text-slate-200">归档行程</h4>
+                  {archivedTrips.length ? (
+                    archivedTrips.map((trip) => {
+                      const usageCount = getTripUsageCount(trip.id)
+                      return (
+                        <div key={trip.id} className="flex items-center gap-3 rounded-lg border border-slate-200/80 bg-white/70 px-3 py-2.5 dark:border-white/10 dark:bg-black/15">
+                          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-emerald-50 text-emerald-700 dark:bg-emerald-400/15 dark:text-emerald-200">
+                            <MapPin className="h-4 w-4" />
+                          </span>
+                          <span className="min-w-0 flex-1">
+                            <span className="block truncate text-sm font-medium">{trip.name}</span>
+                            <span className="block truncate text-xs text-slate-500 dark:text-slate-400">{usageCount > 0 ? `已被 ${usageCount} 笔账单使用` : '未被使用，可删除'}</span>
+                          </span>
+                          <Button type="button" variant="ghost" size="icon" className="h-8 w-8 text-slate-500 disabled:opacity-35" onClick={() => deleteArchivedTrip(trip)} disabled={usageCount > 0} aria-label={`删除归档行程${trip.name}`}>
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      )
+                    })
+                  ) : (
+                    <EmptyState icon={Archive} title="没有归档行程" detail="归档行程后会显示在这里。" />
+                  )}
+                </section>
+              </div>
+            ) : null}
+
           </div>
           <div className="border-t border-slate-200/80 bg-white/92 px-4 pb-[max(env(safe-area-inset-bottom),1rem)] pt-3 dark:border-white/10 dark:bg-[#090d18]/95">
             <Button type="button" variant="outline" className="h-11 w-full rounded-lg border-slate-200 bg-white text-base font-semibold text-slate-700 shadow-sm hover:bg-slate-50 dark:border-white/10 dark:bg-white/[0.06] dark:text-slate-100 dark:hover:bg-white/[0.1]" onClick={() => setSettingsPanel(null)}>
@@ -1744,9 +2082,13 @@ export function MoneyApp() {
                 </Field>
                 <Field label="发票">
                   <select value={smartDraft.invoice_status} onChange={(event) => patchSmartDraft({ invoice_status: event.target.value })} className="field-input h-10">
-                    {invoiceOptions.map((status) => (
-                      <option key={status} value={status}>{invoiceLabels[status]}</option>
+                    {smartDraft.invoice_status && !activeInvoiceStatuses.some((status) => status.value === smartDraft.invoice_status) ? (
+                      <option value={smartDraft.invoice_status}>{invoiceLabelMap[smartDraft.invoice_status] || smartDraft.invoice_status}</option>
+                    ) : null}
+                    {activeInvoiceStatuses.map((status) => (
+                      <option key={status.id} value={status.value}>{status.label}</option>
                     ))}
+                    {!activeInvoiceStatuses.length ? <option value="">暂无发票状态</option> : null}
                   </select>
                 </Field>
               </div>
