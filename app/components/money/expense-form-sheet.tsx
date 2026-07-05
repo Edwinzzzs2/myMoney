@@ -37,7 +37,7 @@ export function ExpenseFormSheet({
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent
         side={isDesktop ? "right" : "bottom"}
-        className="flex flex-col gap-0 border-slate-200 bg-[#f6f7f4] p-0 dark:border-white/10 dark:bg-[#0b101c] data-[state=closed]:duration-200 data-[state=open]:duration-300 max-lg:max-h-[calc(100dvh-env(safe-area-inset-top)-0.75rem)] max-lg:rounded-t-2xl max-lg:shadow-[0_-24px_70px_rgba(15,23,42,0.20)] lg:h-dvh lg:w-[min(31rem,calc(100vw-2rem))] lg:max-w-none lg:shadow-[-24px_0_70px_rgba(15,23,42,0.18)]"
+        className="flex flex-col gap-0 border-slate-200 bg-[#f6f7f4] p-0 dark:border-white/10 dark:bg-[#121a22] data-[state=closed]:duration-200 data-[state=open]:duration-300 max-lg:max-h-[calc(100dvh-env(safe-area-inset-top)-0.75rem)] max-lg:rounded-t-2xl max-lg:shadow-[0_-24px_70px_rgba(15,23,42,0.20)] lg:h-dvh lg:w-[min(31rem,calc(100vw-2rem))] lg:max-w-none lg:shadow-[-24px_0_70px_rgba(15,23,42,0.18)]"
       >
         <SheetHeader className="shrink-0 border-b border-slate-200/80 px-4 pb-3 pt-4 pr-12 text-left dark:border-white/10 lg:px-5 lg:pb-4 lg:pt-5">
           <SheetTitle className="text-base">编辑账单</SheetTitle>

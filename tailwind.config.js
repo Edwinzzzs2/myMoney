@@ -18,7 +18,7 @@ module.exports = {
           900: '#134e4a'
         },
         slatex: {
-          950: '#070a12'
+          950: '#0b1013'
         },
         background: 'hsl(var(--background))',
         foreground: 'hsl(var(--foreground))',

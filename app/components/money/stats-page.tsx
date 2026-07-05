@@ -185,7 +185,7 @@ function CategoryStats({
           <div className="mt-4 grid grid-cols-[10rem_minmax(0,1fr)] items-center gap-4">
             <div className="relative h-36 w-36">
               <div className="h-full w-full rounded-full" style={{ background: `conic-gradient(${conic}, rgba(148,163,184,0.16) ${cursor}% 100%)` }} />
-              <div className="absolute inset-7 flex flex-col items-center justify-center rounded-full bg-white text-center shadow-inner dark:bg-[#101720]">
+              <div className="absolute inset-7 flex flex-col items-center justify-center rounded-full bg-white text-center shadow-inner dark:bg-[#0b1013]">
                 <span className="text-xs text-slate-500 dark:text-slate-400">总支出</span>
                 <span className="mt-1 text-sm font-semibold text-slate-950 dark:text-white">{formatMoneyCompact(monthTotal, 2)}</span>
               </div>

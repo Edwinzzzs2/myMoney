@@ -39,7 +39,7 @@ export function BatchConfirmDialog({
       aria-label="确认批量修改"
     >
       <button type="button" className="absolute inset-0 cursor-default" aria-label="取消批量修改" onClick={onCancel} />
-      <Card className="relative z-10 w-full max-w-sm rounded-lg border-slate-200/80 bg-white p-4 shadow-[0_24px_80px_rgba(15,23,42,0.24)] dark:border-white/10 dark:bg-[#101624]">
+      <Card className="relative z-10 w-full max-w-sm rounded-lg border-slate-200/80 bg-white p-4 shadow-[0_24px_80px_rgba(15,23,42,0.24)] dark:border-white/10 dark:bg-[#121a22]">
         <div className="flex items-start gap-3">
           <span className={cn('mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-white', isReimbursed ? 'bg-emerald-600' : 'bg-amber-500')}>
             <CheckCircle2 className="h-5 w-5" />

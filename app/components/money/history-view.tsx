@@ -80,7 +80,7 @@ export function HistoryView({
   return (
     <div className="pb-1">
       {batchSelecting ? (
-        <div className="sticky top-0 z-20 border-b border-slate-200/70 bg-[#fffdf8] px-4 py-2 dark:border-white/10 dark:bg-[#070a12] sm:px-6 lg:px-8">
+        <div className="sticky top-0 z-20 border-b border-slate-200/70 bg-[#fffdf8] px-4 py-2 dark:border-white/10 dark:bg-[#0b1013] sm:px-6 lg:px-8">
           <div className="mx-auto max-w-[430px] lg:max-w-5xl">
             <div className="flex w-full min-w-0 items-center gap-2 overflow-x-auto rounded-lg border border-emerald-200/80 bg-white/95 px-3 py-2 shadow-[0_8px_22px_rgba(15,23,42,0.10)] dark:border-emerald-400/20 dark:bg-white/[0.08]">
               <label className="flex h-8 shrink-0 cursor-pointer items-center gap-1.5 rounded-md border border-emerald-200 bg-emerald-50 px-2.5 text-xs font-medium text-emerald-700 transition hover:bg-emerald-100 dark:border-emerald-400/30 dark:bg-emerald-400/10 dark:text-emerald-100 dark:hover:bg-emerald-400/15">

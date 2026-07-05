@@ -39,26 +39,26 @@ body {
   }
 
   .dark {
-    --background: 229 50% 4%;
-    --foreground: 210 40% 98%;
-    --card: 225 35% 8%;
-    --card-foreground: 210 40% 98%;
-    --popover: 225 35% 8%;
-    --popover-foreground: 210 40% 98%;
-    --primary: 174 72% 45%;
-    --primary-foreground: 224 42% 8%;
-    --secondary: 224 28% 14%;
-    --secondary-foreground: 210 40% 98%;
-    --muted: 224 28% 14%;
-    --muted-foreground: 218 15% 69%;
-    --accent: 222 28% 16%;
-    --accent-foreground: 210 40% 98%;
+    --background: 204 28% 6%;
+    --foreground: 210 25% 98%;
+    --card: 204 28% 10%;
+    --card-foreground: 210 25% 98%;
+    --popover: 204 28% 10%;
+    --popover-foreground: 210 25% 98%;
+    --primary: 160 84% 39%;
+    --primary-foreground: 204 28% 6%;
+    --secondary: 204 25% 13%;
+    --secondary-foreground: 210 25% 98%;
+    --muted: 204 25% 12%;
+    --muted-foreground: 204 12% 65%;
+    --accent: 204 25% 14%;
+    --accent-foreground: 210 25% 98%;
     --destructive: 0 72% 58%;
     --destructive-foreground: 210 40% 98%;
-    --border: 222 25% 16%;
-    --input: 222 25% 16%;
-    --ring: 174 72% 45%;
-    --chart-1: 174 72% 45%;
+    --border: 204 20% 15%;
+    --input: 204 20% 15%;
+    --ring: 160 84% 39%;
+    --chart-1: 160 84% 39%;
     --chart-2: 218 90% 62%;
     --chart-3: 34 96% 58%;
     --chart-4: 352 82% 61%;
@@ -126,7 +126,7 @@ body {
 
   .dark .field-input option {
     color: #e5e7eb;
-    background: #101624;
+    background: #121a22;
   }
 }
 

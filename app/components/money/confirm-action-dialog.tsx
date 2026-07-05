@@ -42,7 +42,7 @@ export function ConfirmActionDialog({
         if (!pending) onOpenChange(nextOpen)
       }}
     >
-      <AlertDialogContent className="w-[calc(100%-1.5rem)] max-w-sm rounded-xl border-slate-200 bg-white p-5 shadow-[0_24px_80px_rgba(15,23,42,0.24)] dark:border-white/10 dark:bg-[#101624]">
+      <AlertDialogContent className="w-[calc(100%-1.5rem)] max-w-sm rounded-xl border-slate-200 bg-white p-5 shadow-[0_24px_80px_rgba(15,23,42,0.24)] dark:border-white/10 dark:bg-[#121a22]">
         <AlertDialogHeader className="text-left">
           <span
             className={cn(

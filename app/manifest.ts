@@ -7,8 +7,8 @@ export default function manifest(): MetadataRoute.Manifest {
     description: '出差报销记录',
     start_url: '/',
     display: 'standalone',
-    background_color: '#070a12',
-    theme_color: '#070a12',
+    background_color: '#0b1013',
+    theme_color: '#0b1013',
     icons: [
       {
         src: '/pwa-192.png',

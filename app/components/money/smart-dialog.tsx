@@ -90,7 +90,7 @@ export function SmartDialog({
 
   return (
     <div className="fixed inset-0 z-50 flex h-dvh items-end justify-center bg-black/35 px-3 pb-[max(env(safe-area-inset-bottom),0.75rem)] pt-[max(env(safe-area-inset-top),0.75rem)] backdrop-blur-sm dark:bg-black/70 sm:items-center sm:p-6">
-      <Card className="max-h-[calc(100dvh-env(safe-area-inset-top)-env(safe-area-inset-bottom)-1rem)] w-full max-w-lg overflow-y-auto overscroll-contain rounded-t-lg border-slate-200/80 bg-white p-4 shadow-float custom-scrollbar dark:border-white/10 dark:bg-[#101624] sm:rounded-lg">
+      <Card className="max-h-[calc(100dvh-env(safe-area-inset-top)-env(safe-area-inset-bottom)-1rem)] w-full max-w-lg overflow-y-auto overscroll-contain rounded-t-lg border-slate-200/80 bg-white p-4 shadow-float custom-scrollbar dark:border-white/10 dark:bg-[#121a22] sm:rounded-lg">
         <div className="flex items-center justify-between">
           <div>
             <h2 className="text-xl font-semibold tracking-normal">{smartMode === 'voice' ? '语音记账' : '智能记账'}</h2>

@@ -40,7 +40,7 @@ export function MoneyTopBar({
   const title = isRecord ? '记账' : activeTab === 'stats' ? '统计' : isHistory ? '历史' : '设置'
 
   return (
-    <header className="z-30 shrink-0 border-b border-slate-200/70 bg-[#fffdf8] px-4 dark:border-white/10 dark:bg-[#070a12] sm:px-6 lg:px-8">
+    <header className="z-30 shrink-0 border-b border-slate-200/70 bg-[#fffdf8] px-4 dark:border-white/10 dark:bg-transparent sm:px-6 lg:px-8">
       <div className={cn('mx-auto flex h-14 items-center justify-between gap-3', isRecord ? 'max-w-[390px] lg:max-w-3xl' : 'max-w-[430px] lg:max-w-5xl')}>
         <div className="min-w-0">
           <h2 className="text-xl font-semibold leading-6 tracking-normal text-slate-950 dark:text-white">
@@ -185,7 +185,7 @@ interface BottomNavProps {
 export function BottomNav({ activeTab, setActiveTab }: BottomNavProps) {
   return (
     <nav className="fixed inset-x-0 bottom-0 z-40 px-3 pb-[max(env(safe-area-inset-bottom),0.75rem)] pt-3 lg:hidden">
-      <div className="mx-auto grid h-[4.35rem] max-w-[24rem] grid-cols-4 gap-1 rounded-[2rem] border border-white/80 bg-white/[0.94] p-1.5 shadow-[0_16px_45px_rgba(15,23,42,0.18),inset_0_1px_0_rgba(255,255,255,0.92)] backdrop-blur-2xl dark:border-white/10 dark:bg-[#090d18]/90 dark:shadow-[0_18px_45px_rgba(0,0,0,0.36)]">
+      <div className="mx-auto grid h-[4.35rem] max-w-[24rem] grid-cols-4 gap-1 rounded-[2rem] border border-white/80 bg-white/[0.94] p-1.5 shadow-[0_16px_45px_rgba(15,23,42,0.18),inset_0_1px_0_rgba(255,255,255,0.92)] backdrop-blur-2xl dark:border-white/10 dark:bg-[#121a22]/90 dark:shadow-[0_18px_45px_rgba(0,0,0,0.36)]">
         {tabs.map((tab) => {
           const Icon = tab.icon
           const selected = activeTab === tab.key

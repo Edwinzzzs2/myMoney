@@ -32,8 +32,8 @@ export function LoginScreen({ onLogin }: { onLogin: () => void | Promise<void> }
   }
 
   return (
-    <div className="flex min-h-dvh flex-col items-center justify-center bg-slate-50 px-4 dark:bg-[#070a12]">
-      <div className="w-full max-w-sm rounded-xl border border-slate-200/80 bg-white p-6 shadow-sm dark:border-white/10 dark:bg-[#101624]">
+    <div className="flex min-h-dvh flex-col items-center justify-center bg-slate-50 px-4 dark:bg-[#0b1013]">
+      <div className="w-full max-w-sm rounded-xl border border-slate-200/80 bg-white p-6 shadow-sm dark:border-white/10 dark:bg-[#121a22]">
         <div className="mb-6 text-center">
           <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl bg-transparent shadow-sm">
             <img src="/pwa-192.png" alt="Logo" className="h-12 w-12 rounded-xl object-contain" />

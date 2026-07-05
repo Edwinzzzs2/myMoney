@@ -1352,7 +1352,7 @@ export function MoneyApp() {
 
   if (authLoading) {
     return (
-      <div className="flex min-h-dvh items-center justify-center bg-[#f5f6f5] dark:bg-[#070a12]">
+      <div className="flex min-h-dvh items-center justify-center bg-[#f5f6f5] dark:bg-[#0b1013]">
         <Loader2 className="h-8 w-8 animate-spin text-emerald-600" />
       </div>
     )
@@ -1363,8 +1363,8 @@ export function MoneyApp() {
   }
 
   return (
-    <main className="fixed inset-0 flex flex-col overflow-hidden bg-[#f6f7f4] pt-[env(safe-area-inset-top)] text-[#161a17] dark:bg-[#070a12] dark:text-white">
-      <div className="pointer-events-none fixed inset-0 bg-[linear-gradient(180deg,#fffdf8_0%,#f3f6f1_48%,#eef3f8_100%)] dark:bg-[radial-gradient(circle_at_20%_0%,rgba(45,212,191,0.18),transparent_30%),radial-gradient(circle_at_78%_12%,rgba(91,140,255,0.18),transparent_28%),linear-gradient(145deg,#070a12_0%,#0b1020_55%,#070a12_100%)]" />
+    <main className="fixed inset-0 flex flex-col overflow-hidden bg-[#f6f7f4] pt-[env(safe-area-inset-top)] text-[#161a17] dark:bg-[#0b1013] dark:text-white">
+      <div className="pointer-events-none fixed inset-0 bg-[linear-gradient(180deg,#fffdf8_0%,#f3f6f1_48%,#eef3f8_100%)] dark:bg-[radial-gradient(circle_at_20%_0%,rgba(45,212,191,0.12),transparent_30%),radial-gradient(circle_at_78%_12%,rgba(91,140,255,0.08),transparent_28%),linear-gradient(145deg,#0b1013_0%,#11191f_55%,#0b1013_100%)]" />
       <div className="relative mx-auto grid min-h-0 w-full max-w-[1560px] flex-1 grid-cols-1 lg:grid-cols-[270px_minmax(0,1fr)_390px] xl:grid-cols-[270px_minmax(0,1fr)_440px] 2xl:grid-cols-[270px_minmax(0,1fr)_480px]">
         <DesktopNav activeTab={activeTab} setActiveTab={setActiveTab} totals={totals} />
 
