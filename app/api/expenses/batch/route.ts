@@ -9,7 +9,7 @@ export async function PATCH(req: NextRequest) {
     if (!user) return NextResponse.json({ message: '请先登录后再操作。' }, { status: 401 })
 
     const data = await req.json()
-    const ids = Array.from(new Set((Array.isArray(data?.ids) ? data.ids : []).map((id) => Number(id)))).filter(Number.isInteger)
+    const ids = Array.from(new Set((Array.isArray(data?.ids) ? data.ids : []).map((id: any) => Number(id)))).filter(Number.isInteger)
     const reimbursementStatus = String(data?.reimbursement_status || '').trim()
 
     if (!ids.length) return NextResponse.json({ message: '请选择账单' }, { status: 400 })
