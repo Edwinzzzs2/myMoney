@@ -54,7 +54,7 @@ import {
 } from '@/app/components/money/file-utils'
 import { Loader2 } from 'lucide-react'
 
-type HistoryFilter = 'all' | 'invoice' | 'reimbursement' | 'reimbursed'
+type HistoryFilter = 'all' | 'invoice' | 'invoiced' | 'reimbursement' | 'reimbursed'
 type BatchReimbursementStatus = 'pending' | 'reimbursed'
 type ConfirmActionState = {
   title: string
@@ -207,6 +207,7 @@ export function MoneyApp() {
     const q = search.trim().toLowerCase()
     let list = expenses
     if (historyFilter === 'invoice') list = list.filter((e) => e.invoice_status === 'pending')
+    if (historyFilter === 'invoiced') list = list.filter((e) => e.invoice_status === 'received')
     if (historyFilter === 'reimbursement') list = list.filter((e) => e.reimbursement_status === 'pending')
     if (historyFilter === 'reimbursed') list = list.filter((e) => e.reimbursement_status === 'reimbursed')
     if (!q) return list

@@ -1,6 +1,7 @@
 /**
  * 历史账单页面：搜索、筛选、批量操作、按日期分组列表
  */
+import { useState } from 'react'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -15,9 +16,10 @@ import { EmptyState } from '@/app/components/money/empty-state'
 import { ExpenseRow } from '@/app/components/money/expense-row'
 import { formatMoney } from '@/app/components/money/money-utils'
 import type { Expense } from '@/app/components/money/types'
-import { Search } from 'lucide-react'
+import { cn } from '@/lib/utils'
+import { ChevronDown, Search } from 'lucide-react'
 
-type HistoryFilter = 'all' | 'invoice' | 'reimbursement' | 'reimbursed'
+type HistoryFilter = 'all' | 'invoice' | 'invoiced' | 'reimbursement' | 'reimbursed'
 type BatchReimbursementStatus = 'pending' | 'reimbursed'
 
 interface HistoryViewProps {
@@ -61,6 +63,20 @@ export function HistoryView({
   onEditExpense,
   onDeleteExpense,
 }: HistoryViewProps) {
+  const [collapsedDates, setCollapsedDates] = useState<Set<string>>(() => new Set())
+
+  const toggleDateCollapsed = (date: string) => {
+    setCollapsedDates((current) => {
+      const next = new Set(current)
+      if (next.has(date)) {
+        next.delete(date)
+      } else {
+        next.add(date)
+      }
+      return next
+    })
+  }
+
   return (
     <div className="pb-1">
       {batchSelecting ? (
@@ -126,6 +142,7 @@ export function HistoryView({
                 <SelectContent>
                   <SelectItem value="all">全部</SelectItem>
                   <SelectItem value="invoice">待开票</SelectItem>
+                  <SelectItem value="invoiced">已开票</SelectItem>
                   <SelectItem value="reimbursement">待报销</SelectItem>
                   <SelectItem value="reimbursed">已报销</SelectItem>
                 </SelectContent>
@@ -135,30 +152,53 @@ export function HistoryView({
 
           <div className="space-y-3">
             {groupedExpenses.length ? (
-              groupedExpenses.map(([date, list]) => (
-                <Card key={date} className="overflow-hidden rounded-lg border-slate-200/80 bg-white/80 shadow-[0_10px_24px_rgba(15,23,42,0.06)] backdrop-blur dark:border-white/10 dark:bg-white/[0.045] dark:shadow-none">
-                  <div className="flex items-center justify-between border-b border-slate-200/80 px-3 py-2.5 dark:border-white/10">
-                    <h3 className="font-semibold text-slate-950 dark:text-white">{date.replaceAll('-', '/')}</h3>
-                    <span className="text-sm font-semibold text-red-500">-{formatMoney(list.reduce((sum, item) => sum + Number(item.amount || 0), 0)).replace('¥ ', '¥')}</span>
-                  </div>
-                  <div className="divide-y divide-slate-200/80 dark:divide-white/10">
-                    {list.map((expense) => (
-                      <ExpenseRow
-                        key={expense.id}
-                        expense={expense}
-                        compact
-                        showActions
-                        selectable={batchSelecting}
-                        selected={selectedExpenseIdSet.has(expense.id)}
-                        invoiceLabelMap={invoiceLabelMap}
-                        onToggleSelected={onToggleExpenseSelection}
-                        onEdit={onEditExpense}
-                        onDelete={onDeleteExpense}
+              groupedExpenses.map(([date, list]) => {
+                const collapsed = collapsedDates.has(date)
+                const dayTotal = list.reduce((sum, item) => sum + Number(item.amount || 0), 0)
+
+                return (
+                  <Card key={date} className="overflow-hidden rounded-xl border-slate-200/80 bg-white/90 shadow-[0_10px_24px_rgba(15,23,42,0.06)] backdrop-blur dark:border-white/10 dark:bg-white/[0.045] dark:shadow-none">
+                    <button
+                      type="button"
+                      className="flex w-full items-center gap-2 border-b border-slate-200/80 px-3.5 py-3 text-left transition hover:bg-slate-50/80 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-emerald-300/60 dark:border-white/10 dark:hover:bg-white/[0.04] dark:focus:ring-emerald-300/30"
+                      onClick={() => toggleDateCollapsed(date)}
+                      aria-expanded={!collapsed}
+                    >
+                      <span className="min-w-0 flex-1 truncate text-base font-semibold text-slate-950 dark:text-white">
+                        {date.replaceAll('-', '/')}
+                      </span>
+                      <span className="shrink-0 text-base font-semibold text-red-500">
+                        -{formatMoney(dayTotal).replace('¥ ', '¥')}
+                      </span>
+                      <ChevronDown
+                        className={cn(
+                          'h-4 w-4 shrink-0 text-slate-500 transition-transform dark:text-slate-400',
+                          !collapsed && 'rotate-180'
+                        )}
+                        aria-hidden="true"
                       />
-                    ))}
-                  </div>
-                </Card>
-              ))
+                    </button>
+                    {!collapsed ? (
+                      <div className="divide-y divide-slate-200/80 dark:divide-white/10">
+                        {list.map((expense) => (
+                          <ExpenseRow
+                            key={expense.id}
+                            expense={expense}
+                            compact
+                            showActions
+                            selectable={batchSelecting}
+                            selected={selectedExpenseIdSet.has(expense.id)}
+                            invoiceLabelMap={invoiceLabelMap}
+                            onToggleSelected={onToggleExpenseSelection}
+                            onEdit={onEditExpense}
+                            onDelete={onDeleteExpense}
+                          />
+                        ))}
+                      </div>
+                    ) : null}
+                  </Card>
+                )
+              })
             ) : (
               <EmptyState icon={Search} title="没有匹配记录" detail="换一个关键词，或者先添加一笔账单。" />
             )}
