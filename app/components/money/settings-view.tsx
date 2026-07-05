@@ -1,7 +1,7 @@
 /**
  * 设置页面：设置菜单入口列表（非弹出面板内容）
  */
-import type { ComponentType } from 'react'
+import { useEffect, useState, type ComponentType } from 'react'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
@@ -10,7 +10,9 @@ import {
   Archive,
   ChevronRight,
   CreditCard,
+  Download,
   FileCheck2,
+  FileText,
   MapPin,
   Moon,
   SlidersHorizontal,
@@ -27,13 +29,16 @@ interface SettingsViewProps {
   settingsPanel: SettingsPanel
   activeCategories: Category[]
   trips: Trip[]
+  exportTrips: Trip[]
   activePaymentMethods: PaymentMethod[]
   activeInvoiceStatuses: InvoiceStatus[]
   archivedItemCount: number
   adminUsers: any[]
+  exportingDoc: boolean
   onSetSettingsPanel: (panel: SettingsPanel) => void
   onToggleTheme: (dark: boolean) => void
   onClearHistory: () => void
+  onExportTripDoc: (tripId: string) => void
   onLogout: () => void
   onOpenUserPanel: () => void
   onOpenUsersPanel: () => void
@@ -91,13 +96,16 @@ export function SettingsView({
   settingsPanel,
   activeCategories,
   trips,
+  exportTrips,
   activePaymentMethods,
   activeInvoiceStatuses,
   archivedItemCount,
   adminUsers,
+  exportingDoc,
   onSetSettingsPanel,
   onToggleTheme,
   onClearHistory,
+  onExportTripDoc,
   onLogout,
   onOpenUserPanel,
   onOpenUsersPanel,
@@ -136,6 +144,7 @@ export function SettingsView({
       </SettingGroup>
 
       <SettingGroup title="数据管理">
+        <ExportDocRow trips={exportTrips} exporting={exportingDoc} onExport={onExportTripDoc} />
         <SettingRow icon={Archive} label="归档数据" detail={`${archivedItemCount} 项归档`} active={settingsPanel === 'archive'} onClick={() => onSetSettingsPanel('archive')} />
         <SettingRow icon={Trash2} label="清空历史数据" danger detail="保留分类与行程" onClick={onClearHistory} />
       </SettingGroup>
@@ -165,6 +174,68 @@ export function SettingsView({
         退出登录
       </Button>
       <p className="pt-2 text-center text-xs text-slate-400">Travel Ledger · v1.0</p>
+    </div>
+  )
+}
+
+function ExportDocRow({
+  trips,
+  exporting,
+  onExport,
+}: {
+  trips: Trip[]
+  exporting: boolean
+  onExport: (tripId: string) => void
+}) {
+  const [tripId, setTripId] = useState('')
+
+  useEffect(() => {
+    if (!trips.length) {
+      setTripId('')
+      return
+    }
+    if (!trips.some((trip) => trip.id === tripId)) {
+      setTripId(trips[0].id)
+    }
+  }, [trips, tripId])
+
+  return (
+    <div className="space-y-3 px-4 py-3.5">
+      <div className="flex items-center gap-3">
+        <FileText className="h-5 w-5 shrink-0 text-slate-800 dark:text-slate-100" />
+        <span className="min-w-0 flex-1">
+          <span className="block text-sm font-medium text-slate-900 dark:text-slate-100">报销文档导出</span>
+          <span className="mt-0.5 block truncate text-xs font-normal text-slate-500 dark:text-slate-400">{trips.length ? `${trips.length} 个行程可选` : '暂无可导出行程'}</span>
+        </span>
+      </div>
+      <div className="flex gap-2">
+        <select
+          value={tripId}
+          onChange={(event) => setTripId(event.target.value)}
+          className="h-10 min-w-0 flex-1 rounded-lg border border-slate-200/80 bg-white/80 px-3 text-sm font-medium text-slate-700 shadow-sm outline-none transition hover:bg-white dark:border-white/10 dark:bg-white/[0.045] dark:text-slate-100 dark:hover:bg-white/[0.08]"
+          aria-label="选择导出行程"
+          disabled={!trips.length || exporting}
+        >
+          {trips.length ? (
+            trips.map((trip) => (
+              <option key={trip.id} value={trip.id}>
+                {trip.name}
+              </option>
+            ))
+          ) : (
+            <option value="">暂无行程</option>
+          )}
+        </select>
+        <Button
+          type="button"
+          className="h-10 shrink-0 rounded-lg bg-emerald-600 px-3 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-50 dark:bg-emerald-400 dark:text-slate-950 dark:hover:bg-emerald-300"
+          disabled={!tripId || exporting}
+          onClick={() => onExport(tripId)}
+        >
+          <Download className="h-4 w-4" />
+          {exporting ? '导出中' : '导出'}
+        </Button>
+      </div>
     </div>
   )
 }

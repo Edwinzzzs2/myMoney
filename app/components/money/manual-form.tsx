@@ -1,5 +1,5 @@
 import type { ChangeEvent, FormEvent, ReactNode } from 'react'
-import { Briefcase, CheckSquare, CreditCard, Eye, FileText, Loader2, MapPin, Plus, Receipt, Tag, Trash2, Upload, X } from 'lucide-react'
+import { Briefcase, CheckSquare, ChevronDown, CreditCard, Eye, FileText, Loader2, MapPin, Plus, Receipt, Tag, Trash2, Upload, X } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
@@ -181,11 +181,14 @@ export function ManualForm({
           </select>
         </FieldRow>
 
-        <details className="group rounded-md border border-slate-200 bg-slate-50 dark:border-white/10 dark:bg-black/20">
-          <summary className="flex h-10 cursor-pointer list-none items-center gap-2 px-3 text-sm font-medium text-slate-500 [&::-webkit-details-marker]:hidden dark:text-slate-400">
+        <details className="group rounded-md border border-slate-200 bg-slate-50 dark:border-white/10 dark:bg-black/20 overflow-hidden">
+          <summary className="flex h-10 cursor-pointer list-none items-center gap-2 px-3 text-sm font-medium text-slate-500 [&::-webkit-details-marker]:hidden hover:bg-slate-100 dark:hover:bg-white/[0.04] transition-colors dark:text-slate-400">
             <Briefcase className="h-4 w-4" />
             更多信息
-            <span className="ml-auto truncate text-xs">{form.expense_date} · {form.expense_time}</span>
+            <div className="ml-auto flex items-center gap-2 text-slate-400 dark:text-slate-500">
+              <span className="truncate text-xs">{form.expense_date} · {form.expense_time}</span>
+              <ChevronDown className="h-4 w-4 transition-transform group-open:rotate-180" />
+            </div>
           </summary>
           <div className="grid gap-3.5 border-t border-slate-200 p-3.5 dark:border-white/10">
             

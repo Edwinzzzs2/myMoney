@@ -100,6 +100,7 @@ export function MoneyApp() {
   const [editingInvoiceStatusId, setEditingInvoiceStatusId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [exportingDoc, setExportingDoc] = useState(false)
   const [error, setError] = useState('')
   const [smartOpen, setSmartOpen] = useState(false)
   const [smartMode, setSmartMode] = useState<SmartMode>('text')
@@ -117,6 +118,7 @@ export function MoneyApp() {
 
   const activeCategories = useMemo(() => categories.filter((item) => item.is_active), [categories])
   const archivedCategories = useMemo(() => categories.filter((item) => !item.is_active), [categories])
+  const exportTrips = useMemo(() => [...trips, ...archivedTrips], [trips, archivedTrips])
   const archivedItemCount = archivedCategories.length + archivedTrips.length
   const activePaymentMethods = useMemo(() => accountPaymentMethods.filter((item) => item.is_active), [accountPaymentMethods])
   const activeInvoiceStatuses = useMemo(() => accountInvoiceStatuses.filter((item) => item.is_active), [accountInvoiceStatuses])
@@ -784,7 +786,7 @@ export function MoneyApp() {
   }
 
   function getExportLabel(tripId = '') {
-    return trips.find((t) => t.id === tripId)?.name || '全部行程'
+    return exportTrips.find((t) => t.id === tripId)?.name || '全部行程'
   }
 
   function buildExportData(expensesToExport: Expense[]) {
@@ -852,6 +854,31 @@ export function MoneyApp() {
     const { csv, receiptFiles } = buildExportData(exportExpenses)
     const csvFile = { name: 'ledger.csv', data: new TextEncoder().encode(`\ufeff${csv}`) }
     downloadBlob(createZipArchive([csvFile, ...receiptFiles]), `记账-${safeFileName(getExportLabel(tripId))}-${todayISO()}.zip`)
+  }
+
+  async function exportTripDoc(tripId: string) {
+    if (!tripId) { setError('请选择要导出的行程'); return }
+    const exportExpenses = getExportExpenses(tripId)
+    if (!exportExpenses.length) { setError('没有可导出的账单'); return }
+
+    setExportingDoc(true)
+    setError('')
+    try {
+      const res = await fetch(`/api/exports/trip-doc?tripId=${encodeURIComponent(tripId)}`)
+      if (!res.ok) {
+        let message = `请求失败：${res.status}`
+        try {
+          const body = await res.json()
+          message = body?.message || body?.error || message
+        } catch {}
+        throw new Error(message)
+      }
+      downloadBlob(await res.blob(), `${safeFileName(getExportLabel(tripId))}.docx`)
+    } catch (e: any) {
+      setError(friendlyErrorMessage(e, '导出报销文档失败'))
+    } finally {
+      setExportingDoc(false)
+    }
   }
 
   // ─── 智能/语音记账 ────────────────────────────────────────
@@ -1208,13 +1235,16 @@ export function MoneyApp() {
               settingsPanel={settingsPanel}
               activeCategories={activeCategories}
               trips={trips}
+              exportTrips={exportTrips}
               activePaymentMethods={activePaymentMethods}
               activeInvoiceStatuses={activeInvoiceStatuses}
               archivedItemCount={archivedItemCount}
               adminUsers={adminUsers}
+              exportingDoc={exportingDoc}
               onSetSettingsPanel={setSettingsPanel}
               onToggleTheme={(dark) => setTheme(dark ? 'dark' : 'light')}
               onClearHistory={clearHistory}
+              onExportTripDoc={exportTripDoc}
               onLogout={handleLogout}
               onOpenUserPanel={() => {
                 setSettingsPanel('profile')
