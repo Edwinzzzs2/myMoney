@@ -35,8 +35,8 @@ export function ExpenseRow({
   const isPending = expense.reimbursement_status === 'pending'
   const reimbursementLabel = reimbursementLabels[expense.reimbursement_status] || expense.reimbursement_status
   const invoiceLabel = invoiceLabelMap?.[expense.invoice_status] || defaultInvoiceLabels[expense.invoice_status] || expense.invoice_status
-  const hasReceipt = Boolean(expense.receipt_url)
-  const hasScreenshot = Boolean(expense.screenshot_url)
+  const receiptUrl = expense.receipt_url || ''
+  const screenshotUrl = expense.screenshot_url || ''
   const metaItems = [
     expense.expense_time || '--:--',
     expense.category_name || '未分类',
@@ -101,7 +101,7 @@ export function ExpenseRow({
           <div className="flex min-w-0 flex-wrap items-center gap-1.5">
             {(!compact || showActions) ? (
               <>
-                {hasReceipt ? (
+                {receiptUrl ? (
                   <Dialog>
                     <DialogTrigger asChild>
                       <Button
@@ -118,11 +118,11 @@ export function ExpenseRow({
                     </DialogTrigger>
                     <DialogContent className="max-w-3xl max-h-[85vh] overflow-auto p-4 flex items-center justify-center border-slate-200 dark:border-white/10 bg-white dark:bg-[#101625]" onClick={(e) => e.stopPropagation()}>
                       <DialogTitle className="sr-only">发票图片预览</DialogTitle>
-                      <img src={expense.receipt_url} alt="发票图片" className="max-w-full max-h-[75vh] object-contain rounded" />
+                      <img src={receiptUrl} alt="发票图片" className="max-w-full max-h-[75vh] object-contain rounded" />
                     </DialogContent>
                   </Dialog>
                 ) : null}
-                {hasScreenshot ? (
+                {screenshotUrl ? (
                   <Dialog>
                     <DialogTrigger asChild>
                       <Button
@@ -139,7 +139,7 @@ export function ExpenseRow({
                     </DialogTrigger>
                     <DialogContent className="max-w-3xl max-h-[85vh] overflow-auto p-4 flex items-center justify-center border-slate-200 dark:border-white/10 bg-white dark:bg-[#101625]" onClick={(e) => e.stopPropagation()}>
                       <DialogTitle className="sr-only">消费截图预览</DialogTitle>
-                      <img src={expense.screenshot_url} alt="消费截图" className="max-w-full max-h-[75vh] object-contain rounded" />
+                      <img src={screenshotUrl} alt="消费截图" className="max-w-full max-h-[75vh] object-contain rounded" />
                     </DialogContent>
                   </Dialog>
                 ) : null}

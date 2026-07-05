@@ -3,7 +3,6 @@ import type { Metadata, Viewport } from 'next'
 import type { ReactNode } from 'react'
 import { ThemeProvider } from '@/components/theme-provider'
 import { Toaster } from '@/components/ui/sonner'
-import { PwaRegister } from '@/app/components/pwa/pwa-register'
 
 export const metadata: Metadata = {
   title: '记账 - 出差报销记录',
@@ -42,7 +41,6 @@ export default function RootLayout({ children }: { children: ReactNode }) {
           {children}
           <Toaster />
         </ThemeProvider>
-        <PwaRegister />
       </body>
     </html>
   )

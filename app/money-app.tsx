@@ -574,19 +574,6 @@ export function MoneyApp() {
     }
   }
 
-  async function quickStatus(expense: Expense, status: string) {
-    setError('')
-    try {
-      await fetchJson<Expense>(`/api/expenses/${expense.id}`, {
-        method: 'PATCH',
-        body: JSON.stringify({ ...expenseToPayload(expense), reimbursement_status: status }),
-      })
-      await loadData()
-    } catch (e: any) {
-      setError(friendlyErrorMessage(e, '更新状态失败'))
-    }
-  }
-
   // ─── 批量操作 ─────────────────────────────────────────────
   function toggleExpenseSelection(expense: Expense) {
     setSelectedExpenseIds((current) =>
@@ -1408,7 +1395,6 @@ export function MoneyApp() {
                 onGoHistory={() => setActiveTab('history')}
                 onEditExpense={editExpense}
                 onDeleteExpense={deleteExpense}
-                onQuickStatus={quickStatus}
               />
             ) : null}
 
