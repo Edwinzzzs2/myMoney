@@ -1,19 +1,19 @@
 "use client"
 
-import type { ComponentType, FormEvent, ReactNode } from 'react'
+import type { FormEvent } from 'react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useTheme } from 'next-themes'
-import { EmptyState } from '@/app/components/money/empty-state'
 import { ManualForm as ManualExpenseForm } from '@/app/components/money/manual-form'
 import { RecordPage } from '@/app/components/money/record-page'
 import { StatsPage } from '@/app/components/money/stats-page'
-import { ExpenseRow as ExpenseItemRow } from '@/app/components/money/expense-row'
-import { Button } from '@/components/ui/button'
-import { Card } from '@/components/ui/card'
-import { Input } from '@/components/ui/input'
-import { Switch } from '@/components/ui/switch'
-import { Textarea } from '@/components/ui/textarea'
 import { LoginScreen } from '@/app/components/money/login-screen'
+import { HistoryView } from '@/app/components/money/history-view'
+import { SettingsView } from '@/app/components/money/settings-view'
+import { SettingsPanelDrawer } from '@/app/components/money/settings-panel'
+import { BatchConfirmDialog } from '@/app/components/money/batch-confirm-dialog'
+import { SmartDialog } from '@/app/components/money/smart-dialog'
+import { DesktopNav, BottomNav } from '@/app/components/money/nav'
+import { Button } from '@/components/ui/button'
 import type {
   AiParsedExpense,
   BootstrapData,
@@ -23,6 +23,7 @@ import type {
   ExpenseFormState,
   InvoiceStatus,
   PaymentMethod,
+  SettingsPanel,
   SmartMode,
   TabKey,
   Trip,
@@ -34,64 +35,25 @@ import {
   fetchJson,
   formToPayload,
   formatMoney,
-  formatVoiceTime,
   friendlyErrorMessage,
-  getCategoryIcon,
-  iconMap,
   invoiceLabels as defaultInvoiceLabels,
   makeBlankForm,
   nowTime,
   paymentMethods as defaultPaymentMethods,
   reimbursementLabels,
-  tabs,
   todayISO,
 } from '@/app/components/money/money-utils'
 import {
-  Archive,
-  BookOpen,
-  CheckCircle2,
-  ChevronRight,
-  CreditCard,
-  Eye,
-  EyeOff,
-  FileCheck2,
-  Loader2,
-  MapPin,
-  Mic,
-  Moon,
-  Pencil,
-  Plus,
-  RefreshCcw,
-  Receipt,
-  Search,
-  SlidersHorizontal,
-  Sparkles,
-  Sun,
-  Trash2,
-  User,
-  Users,
-  Wallet,
-  X,
-} from 'lucide-react'
-import { cn } from '@/lib/utils'
+  createZipArchive,
+  createReceiptZipFile,
+  downloadBlob,
+  safeFileName,
+} from '@/app/components/money/file-utils'
+import { Loader2, X } from 'lucide-react'
 
 type HistoryFilter = 'all' | 'invoice' | 'reimbursement' | 'reimbursed'
 type BatchReimbursementStatus = 'pending' | 'reimbursed'
-type SettingsPanel = 'profile' | 'categories' | 'trips' | 'archive' | 'payment' | 'invoice' | 'users' | null
-type ZipFile = { name: string; data: Uint8Array }
-type CategoryIconValue = keyof typeof iconMap
 const preferredTripStorageKey = 'myMoney.preferredTripId'
-
-const categoryIconOptions: Array<{ value: CategoryIconValue; label: string }> = [
-  { value: 'utensils', label: '餐饮' },
-  { value: 'car', label: '交通' },
-  { value: 'hotel', label: '住宿' },
-  { value: 'plane', label: '机票高铁' },
-  { value: 'briefcase', label: '办公采购' },
-  { value: 'wifi', label: '通讯网络' },
-  { value: 'receipt', label: '票据' },
-  { value: 'more', label: '其他' },
-]
 
 export function MoneyApp() {
   const { resolvedTheme, setTheme } = useTheme()
@@ -110,7 +72,6 @@ export function MoneyApp() {
   const [selectedExpenseIds, setSelectedExpenseIds] = useState<string[]>([])
   const [batchConfirmStatus, setBatchConfirmStatus] = useState<BatchReimbursementStatus | null>(null)
   const [settingsPanel, setSettingsPanel] = useState<SettingsPanel>(null)
-  const [exportTripId, setExportTripId] = useState('')
   const [user, setUser] = useState<{ id: string; username: string } | null>(null)
   const [authLoading, setAuthLoading] = useState(true)
   const [oldPassword, setOldPassword] = useState('')
@@ -179,7 +140,6 @@ export function MoneyApp() {
       reimbursed: 0,
       countToday: 0,
     }
-
     for (const expense of expenses) {
       const amount = Number(expense.amount || 0)
       summary.total += amount
@@ -200,26 +160,12 @@ export function MoneyApp() {
   const filteredExpenses = useMemo(() => {
     const q = search.trim().toLowerCase()
     let list = expenses
-    if (historyFilter === 'invoice') {
-      list = list.filter((expense) => expense.invoice_status === 'pending')
-    }
-    if (historyFilter === 'reimbursement') {
-      list = list.filter((expense) => expense.reimbursement_status === 'pending')
-    }
-    if (historyFilter === 'reimbursed') {
-      list = list.filter((expense) => expense.reimbursement_status === 'reimbursed')
-    }
+    if (historyFilter === 'invoice') list = list.filter((e) => e.invoice_status === 'pending')
+    if (historyFilter === 'reimbursement') list = list.filter((e) => e.reimbursement_status === 'pending')
+    if (historyFilter === 'reimbursed') list = list.filter((e) => e.reimbursement_status === 'reimbursed')
     if (!q) return list
     return list.filter((expense) => {
-      const hay = [
-        expense.title,
-        expense.merchant,
-        expense.category_name,
-        expense.trip_name,
-        expense.destination,
-        expense.note,
-        expense.amount,
-      ]
+      const hay = [expense.title, expense.merchant, expense.category_name, expense.trip_name, expense.destination, expense.note, expense.amount]
         .join(' ')
         .toLowerCase()
       return hay.includes(q)
@@ -237,9 +183,9 @@ export function MoneyApp() {
   }, [filteredExpenses])
 
   const selectedExpenseIdSet = useMemo(() => new Set(selectedExpenseIds), [selectedExpenseIds])
-  const selectedExpenses = useMemo(() => expenses.filter((expense) => selectedExpenseIdSet.has(expense.id)), [expenses, selectedExpenseIdSet])
-  const selectedExpenseTotal = useMemo(() => selectedExpenses.reduce((sum, expense) => sum + Number(expense.amount || 0), 0), [selectedExpenses])
-  const allFilteredExpensesSelected = filteredExpenses.length > 0 && filteredExpenses.every((expense) => selectedExpenseIdSet.has(expense.id))
+  const selectedExpenses = useMemo(() => expenses.filter((e) => selectedExpenseIdSet.has(e.id)), [expenses, selectedExpenseIdSet])
+  const selectedExpenseTotal = useMemo(() => selectedExpenses.reduce((sum, e) => sum + Number(e.amount || 0), 0), [selectedExpenses])
+  const allFilteredExpensesSelected = filteredExpenses.length > 0 && filteredExpenses.every((e) => selectedExpenseIdSet.has(e.id))
 
   const stats = useMemo(() => {
     const monthKey = todayISO().slice(0, 7)
@@ -248,8 +194,8 @@ export function MoneyApp() {
       .map((category) => ({
         category,
         amount: monthExpenses
-          .filter((expense) => expense.category_id === category.id)
-          .reduce((sum, expense) => sum + Number(expense.amount || 0), 0),
+          .filter((e) => e.category_id === category.id)
+          .reduce((sum, e) => sum + Number(e.amount || 0), 0),
       }))
       .filter((item) => item.amount > 0)
       .sort((a, b) => b.amount - a.amount)
@@ -265,8 +211,8 @@ export function MoneyApp() {
       .map((trip) => ({
         trip,
         amount: expenses
-          .filter((expense) => expense.trip_id === trip.id)
-          .reduce((sum, expense) => sum + Number(expense.amount || 0), 0),
+          .filter((e) => e.trip_id === trip.id)
+          .reduce((sum, e) => sum + Number(e.amount || 0), 0),
       }))
       .filter((item) => item.amount > 0)
       .sort((a, b) => b.amount - a.amount)
@@ -279,7 +225,7 @@ export function MoneyApp() {
   }, [])
 
   useEffect(() => {
-    const existingIds = new Set(expenses.map((expense) => expense.id))
+    const existingIds = new Set(expenses.map((e) => e.id))
     setSelectedExpenseIds((current) => current.filter((id) => existingIds.has(id)))
   }, [expenses])
 
@@ -290,6 +236,7 @@ export function MoneyApp() {
     }
   }, [])
 
+  // ─── 数据加载 ─────────────────────────────────────────────
   async function loadData() {
     setLoading(true)
     setError('')
@@ -301,8 +248,8 @@ export function MoneyApp() {
         setLoading(false)
         return
       }
-      
-      const data = await fetchJson<BootstrapData & { authenticated: boolean, user: any }>('/api/bootstrap')
+
+      const data = await fetchJson<BootstrapData & { authenticated: boolean; user: any }>('/api/bootstrap')
       if (!data.authenticated) {
         setUser(null)
         setAuthLoading(false)
@@ -342,6 +289,7 @@ export function MoneyApp() {
     }
   }
 
+  // ─── 认证 ─────────────────────────────────────────────────
   async function handleLogout() {
     try {
       await fetch('/api/auth/logout', { method: 'POST' })
@@ -356,14 +304,8 @@ export function MoneyApp() {
   async function handlePasswordChange(e: React.FormEvent) {
     e.preventDefault()
     if (!oldPassword || !newPassword) return
-    if (newPassword.length < 2) {
-      setPwdError('新密码长度不能少于 2 位')
-      return
-    }
-    if (newPassword !== confirmPassword) {
-      setPwdError('两次输入的新密码不一致')
-      return
-    }
+    if (newPassword.length < 2) { setPwdError('新密码长度不能少于 2 位'); return }
+    if (newPassword !== confirmPassword) { setPwdError('两次输入的新密码不一致'); return }
     setPwdLoading(true)
     setPwdError('')
     setPwdSuccess('')
@@ -374,9 +316,7 @@ export function MoneyApp() {
         body: JSON.stringify({ oldPassword, newPassword }),
       })
       const data = await res.json()
-      if (!res.ok) {
-        throw new Error(data.error || '修改密码失败')
-      }
+      if (!res.ok) throw new Error(data.error || '修改密码失败')
       setPwdSuccess('密码修改成功！')
       setOldPassword('')
       setNewPassword('')
@@ -388,6 +328,7 @@ export function MoneyApp() {
     }
   }
 
+  // ─── 管理员 ───────────────────────────────────────────────
   async function fetchAdminUsers() {
     setAdminUsersLoading(true)
     try {
@@ -414,9 +355,7 @@ export function MoneyApp() {
         body: JSON.stringify({ targetUserId: adminResetUserId, newPassword: adminNewPassword }),
       })
       const data = await res.json()
-      if (!res.ok) {
-        throw new Error(data.error || '重置密码失败')
-      }
+      if (!res.ok) throw new Error(data.error || '重置密码失败')
       setAdminResetSuccess('重置密码成功！')
       setAdminNewPassword('')
       fetchAdminUsers()
@@ -429,9 +368,7 @@ export function MoneyApp() {
   }
 
   async function handleAdminDeleteUser(targetUserId: string) {
-    if (!window.confirm('确定要删除该用户吗？该操作将同时清空该用户的所有账单、分类和行程数据，且不可恢复！')) {
-      return
-    }
+    if (!window.confirm('确定要删除该用户吗？该操作将同时清空该用户的所有账单、分类和行程数据，且不可恢复！')) return
     try {
       const res = await fetch('/api/admin/users', {
         method: 'DELETE',
@@ -446,6 +383,7 @@ export function MoneyApp() {
     }
   }
 
+  // ─── 表单辅助 ─────────────────────────────────────────────
   function patchForm(patch: Partial<ExpenseFormState>) {
     if (patch.trip_id !== undefined) rememberPreferredTripId(patch.trip_id)
     setForm((current) => ({ ...current, ...patch }))
@@ -468,25 +406,23 @@ export function MoneyApp() {
 
   function rememberPreferredTripId(tripId: string) {
     if (!tripId) return
-    try {
-      window.localStorage.setItem(preferredTripStorageKey, tripId)
-    } catch {}
+    try { window.localStorage.setItem(preferredTripStorageKey, tripId) } catch {}
   }
 
   function getDefaultPaymentMethod(nextMethods = activePaymentMethods) {
-    return nextMethods.find((method) => method.name === defaultPaymentMethods[0])?.name || nextMethods[0]?.name || defaultPaymentMethods[0] || ''
+    return nextMethods.find((m) => m.name === defaultPaymentMethods[0])?.name || nextMethods[0]?.name || defaultPaymentMethods[0] || ''
   }
 
   function getDefaultInvoiceStatus(nextStatuses = activeInvoiceStatuses) {
-    return nextStatuses.find((status) => status.value === 'pending')?.value || nextStatuses[0]?.value || 'pending'
+    return nextStatuses.find((s) => s.value === 'pending')?.value || nextStatuses[0]?.value || 'pending'
   }
 
   function normalizePaymentMethod(value: string, nextMethods = activePaymentMethods) {
-    return nextMethods.some((method) => method.name === value) ? value : getDefaultPaymentMethod(nextMethods)
+    return nextMethods.some((m) => m.name === value) ? value : getDefaultPaymentMethod(nextMethods)
   }
 
   function normalizeInvoiceStatus(value: string, nextStatuses = activeInvoiceStatuses) {
-    return nextStatuses.some((status) => status.value === value) ? value : getDefaultInvoiceStatus(nextStatuses)
+    return nextStatuses.some((s) => s.value === value) ? value : getDefaultInvoiceStatus(nextStatuses)
   }
 
   function makeAccountBlankForm(categoryId = activeCategories[0]?.id || '', tripId = getPreferredTripId(trips)) {
@@ -517,6 +453,7 @@ export function MoneyApp() {
     })
   }
 
+  // ─── 账单 CRUD ────────────────────────────────────────────
   async function saveExpense(event?: FormEvent) {
     event?.preventDefault()
     const nextTripId = form.trip_id || getPreferredTripId(trips)
@@ -584,6 +521,7 @@ export function MoneyApp() {
     }
   }
 
+  // ─── 批量操作 ─────────────────────────────────────────────
   function toggleExpenseSelection(expense: Expense) {
     setSelectedExpenseIds((current) =>
       current.includes(expense.id) ? current.filter((id) => id !== expense.id) : [...current, expense.id]
@@ -591,7 +529,7 @@ export function MoneyApp() {
   }
 
   function toggleFilteredExpenseSelection() {
-    const filteredIds = filteredExpenses.map((expense) => expense.id)
+    const filteredIds = filteredExpenses.map((e) => e.id)
     if (!filteredIds.length) return
     setSelectedExpenseIds((current) => {
       const next = new Set(current)
@@ -604,9 +542,7 @@ export function MoneyApp() {
     })
   }
 
-  function clearSelectedExpenses() {
-    setSelectedExpenseIds([])
-  }
+  function clearSelectedExpenses() { setSelectedExpenseIds([]) }
 
   function exitBatchSelection() {
     setBatchSelecting(false)
@@ -615,10 +551,7 @@ export function MoneyApp() {
   }
 
   function requestBatchUpdateReimbursementStatus(status: BatchReimbursementStatus) {
-    if (!selectedExpenseIds.length) {
-      setError('请先选择账单')
-      return
-    }
+    if (!selectedExpenseIds.length) { setError('请先选择账单'); return }
     setBatchConfirmStatus(status)
   }
 
@@ -642,6 +575,7 @@ export function MoneyApp() {
     }
   }
 
+  // ─── 分类 ─────────────────────────────────────────────────
   async function saveCategory(event: FormEvent) {
     event.preventDefault()
     const name = categoryForm.name.trim()
@@ -676,6 +610,23 @@ export function MoneyApp() {
     }
   }
 
+  async function deleteArchivedCategory(category: Category) {
+    const usageCount = expenses.filter((e) => e.category_id === category.id).length
+    if (usageCount > 0) return
+    if (!window.confirm(`彻底删除「${category.name}」分类？此操作无法恢复。`)) return
+    setSaving(true)
+    setError('')
+    try {
+      await fetchJson(`/api/categories/${category.id}?hard=1`, { method: 'DELETE' })
+      await loadData()
+    } catch (e: any) {
+      setError(friendlyErrorMessage(e, '删除归档分类失败'))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  // ─── 行程 ─────────────────────────────────────────────────
   async function saveTrip(event: FormEvent) {
     event.preventDefault()
     const name = tripForm.name.trim()
@@ -727,24 +678,8 @@ export function MoneyApp() {
     }
   }
 
-  async function deleteArchivedCategory(category: Category) {
-    const usageCount = getCategoryUsageCount(category.id)
-    if (usageCount > 0) return
-    if (!window.confirm(`彻底删除「${category.name}」分类？此操作无法恢复。`)) return
-    setSaving(true)
-    setError('')
-    try {
-      await fetchJson(`/api/categories/${category.id}?hard=1`, { method: 'DELETE' })
-      await loadData()
-    } catch (e: any) {
-      setError(friendlyErrorMessage(e, '删除归档分类失败'))
-    } finally {
-      setSaving(false)
-    }
-  }
-
   async function deleteArchivedTrip(trip: Trip) {
-    const usageCount = getTripUsageCount(trip.id)
+    const usageCount = expenses.filter((e) => e.trip_id === trip.id).length
     if (usageCount > 0) return
     if (!window.confirm(`彻底删除「${trip.name}」行程？此操作无法恢复。`)) return
     setSaving(true)
@@ -759,21 +694,18 @@ export function MoneyApp() {
     }
   }
 
+  // ─── 支付方式 ─────────────────────────────────────────────
   async function savePaymentMethod(event: FormEvent) {
     event.preventDefault()
     const name = paymentMethodForm.trim()
     if (!name) return
-    const currentMethod = accountPaymentMethods.find((method) => method.id === editingPaymentMethodId)
+    const currentMethod = accountPaymentMethods.find((m) => m.id === editingPaymentMethodId)
     setSaving(true)
     setError('')
     try {
       await fetchJson<PaymentMethod>(editingPaymentMethodId ? `/api/payment-methods/${editingPaymentMethodId}` : '/api/payment-methods', {
         method: editingPaymentMethodId ? 'PATCH' : 'POST',
-        body: JSON.stringify({
-          name,
-          sort_order: currentMethod?.sort_order ?? accountPaymentMethods.length,
-          is_active: true,
-        }),
+        body: JSON.stringify({ name, sort_order: currentMethod?.sort_order ?? accountPaymentMethods.length, is_active: true }),
       })
       setPaymentMethodForm('')
       setEditingPaymentMethodId(null)
@@ -796,7 +728,7 @@ export function MoneyApp() {
   }
 
   async function deletePaymentMethod(method: PaymentMethod) {
-    const usageCount = getPaymentMethodUsageCount(method.name)
+    const usageCount = expenses.filter((e) => e.payment_method === method.name).length
     const actionText = usageCount > 0 ? '停用' : '删除'
     if (!window.confirm(`${actionText}「${method.name}」支付方式？${usageCount > 0 ? `它已被 ${usageCount} 笔账单使用，历史账单会保留原支付方式。` : '此操作无法恢复。'}`)) return
     setSaving(true)
@@ -811,21 +743,18 @@ export function MoneyApp() {
     }
   }
 
+  // ─── 发票状态 ─────────────────────────────────────────────
   async function saveInvoiceStatus(event: FormEvent) {
     event.preventDefault()
     const label = invoiceStatusForm.trim()
     if (!label) return
-    const currentStatus = accountInvoiceStatuses.find((status) => status.id === editingInvoiceStatusId)
+    const currentStatus = accountInvoiceStatuses.find((s) => s.id === editingInvoiceStatusId)
     setSaving(true)
     setError('')
     try {
       await fetchJson<InvoiceStatus>(editingInvoiceStatusId ? `/api/invoice-statuses/${editingInvoiceStatusId}` : '/api/invoice-statuses', {
         method: editingInvoiceStatusId ? 'PATCH' : 'POST',
-        body: JSON.stringify({
-          label,
-          sort_order: currentStatus?.sort_order ?? accountInvoiceStatuses.length,
-          is_active: true,
-        }),
+        body: JSON.stringify({ label, sort_order: currentStatus?.sort_order ?? accountInvoiceStatuses.length, is_active: true }),
       })
       setInvoiceStatusForm('')
       setEditingInvoiceStatusId(null)
@@ -848,7 +777,7 @@ export function MoneyApp() {
   }
 
   async function deleteInvoiceStatus(status: InvoiceStatus) {
-    const usageCount = getInvoiceStatusUsageCount(status.value)
+    const usageCount = expenses.filter((e) => e.invoice_status === status.value).length
     const actionText = usageCount > 0 ? '停用' : '删除'
     if (!window.confirm(`${actionText}「${status.label}」发票状态？${usageCount > 0 ? `它已被 ${usageCount} 笔账单使用，历史账单会保留原发票状态。` : '此操作无法恢复。'}`)) return
     setSaving(true)
@@ -863,6 +792,7 @@ export function MoneyApp() {
     }
   }
 
+  // ─── 历史清空 ─────────────────────────────────────────────
   async function clearHistory() {
     if (!expenses.length) return
     if (!window.confirm('确定清空全部历史账单？分类与行程会保留。')) return
@@ -880,6 +810,65 @@ export function MoneyApp() {
     }
   }
 
+  // ─── 导出 ─────────────────────────────────────────────────
+  function getExportExpenses(tripId = '') {
+    return tripId ? expenses.filter((e) => e.trip_id === tripId) : expenses
+  }
+
+  function getExportLabel(tripId = '') {
+    return trips.find((t) => t.id === tripId)?.name || '全部行程'
+  }
+
+  function buildExportData(expensesToExport: Expense[]) {
+    const receiptFiles: ReturnType<typeof createReceiptZipFile>[] = []
+    const receiptPaths = new Map<string, string>()
+    for (const expense of expensesToExport) {
+      const receiptFile = createReceiptZipFile({ ...expense, receipt_url: expense.receipt_url ?? undefined })
+      if (!receiptFile) continue
+      receiptFiles.push(receiptFile)
+      receiptPaths.set(expense.id, receiptFile.name)
+    }
+    const rows = [
+      ['日期', '时间', '行程', '目的地', '分类', '标题', '商户', '金额', '支付方式', '发票', '报销状态', '备注', '票据文件', '票据链接'],
+      ...expensesToExport.map((expense) => [
+        expense.expense_date,
+        expense.expense_time || '',
+        expense.trip_name || '',
+        expense.destination || '',
+        expense.category_name || '',
+        expense.title,
+        expense.merchant || '',
+        expense.amount,
+        expense.payment_method,
+        invoiceLabelMap[expense.invoice_status] || expense.invoice_status,
+        reimbursementLabels[expense.reimbursement_status] || expense.reimbursement_status,
+        expense.note || '',
+        receiptPaths.get(expense.id) || '',
+        expense.receipt_url && !expense.receipt_url.startsWith('data:') ? expense.receipt_url : '',
+      ]),
+    ]
+    return {
+      csv: rows.map((row) => row.map(escapeCsv).join(',')).join('\n'),
+      receiptFiles: receiptFiles.filter(Boolean) as NonNullable<ReturnType<typeof createReceiptZipFile>>[],
+    }
+  }
+
+  function exportCsv(tripId = '') {
+    const exportExpenses = getExportExpenses(tripId)
+    if (!exportExpenses.length) { setError('没有可导出的账单'); return }
+    const { csv } = buildExportData(exportExpenses)
+    downloadBlob(new Blob([`\ufeff${csv}`], { type: 'text/csv;charset=utf-8' }), `记账-${safeFileName(getExportLabel(tripId))}-${todayISO()}.csv`)
+  }
+
+  function exportZip(tripId = '') {
+    const exportExpenses = getExportExpenses(tripId)
+    if (!exportExpenses.length) { setError('没有可导出的账单'); return }
+    const { csv, receiptFiles } = buildExportData(exportExpenses)
+    const csvFile = { name: 'ledger.csv', data: new TextEncoder().encode(`\ufeff${csv}`) }
+    downloadBlob(createZipArchive([csvFile, ...receiptFiles]), `记账-${safeFileName(getExportLabel(tripId))}-${todayISO()}.zip`)
+  }
+
+  // ─── 智能/语音记账 ────────────────────────────────────────
   function inferCategoryId(text: string) {
     const lower = text.toLowerCase()
     const rules = [
@@ -904,29 +893,15 @@ export function MoneyApp() {
     const categoryId = inferCategoryId(normalized)
     const category = activeCategories.find((item) => item.id === categoryId)
     let date = todayISO()
-
-    if (normalized.includes('昨天')) {
-      const d = new Date()
-      d.setDate(d.getDate() - 1)
-      date = d.toISOString().slice(0, 10)
-    }
-    if (normalized.includes('前天')) {
-      const d = new Date()
-      d.setDate(d.getDate() - 2)
-      date = d.toISOString().slice(0, 10)
-    }
+    if (normalized.includes('昨天')) { const d = new Date(); d.setDate(d.getDate() - 1); date = d.toISOString().slice(0, 10) }
+    if (normalized.includes('前天')) { const d = new Date(); d.setDate(d.getDate() - 2); date = d.toISOString().slice(0, 10) }
     const monthDay = normalized.match(/(\d{1,2})月(\d{1,2})[日号]?/)
-    if (monthDay) {
-      const year = new Date().getFullYear()
-      date = `${year}-${monthDay[1].padStart(2, '0')}-${monthDay[2].padStart(2, '0')}`
-    }
-
+    if (monthDay) { const year = new Date().getFullYear(); date = `${year}-${monthDay[1].padStart(2, '0')}-${monthDay[2].padStart(2, '0')}` }
     const title = normalized
       .replace(/[¥￥]?\s*\d+(?:\.\d{1,2})?\s*(元|块|rmb|RMB)?/g, '')
       .replace(/今天|昨天|前天|报销|出差|开票|发票/g, '')
       .replace(/\s+/g, ' ')
       .trim()
-
     return {
       ...makeBlankForm(categoryId, form.trip_id || getPreferredTripId(trips)),
       amount: amount > 0 ? String(amount) : '',
@@ -939,12 +914,77 @@ export function MoneyApp() {
     }
   }
 
+  function normalizeAiDraft(parsed: AiParsedExpense, sourceText = smartText) {
+    return {
+      ...makeBlankForm(parsed.category_id || activeCategories[0]?.id || '', parsed.trip_id || form.trip_id || getPreferredTripId(trips)),
+      ...parsed,
+      amount: parsed.amount === undefined || parsed.amount === null ? '' : String(parsed.amount),
+      merchant: parsed.merchant || '',
+      note: parsed.note || sourceText,
+      receipt_url: parsed.receipt_url || '',
+      expense_date: parsed.expense_date || todayISO(),
+      expense_time: parsed.expense_time || nowTime(),
+      payment_method: normalizePaymentMethod(parsed.payment_method || ''),
+      invoice_status: normalizeInvoiceStatus(parsed.invoice_status || ''),
+      reimbursement_status: parsed.reimbursement_status || 'pending',
+      reimbursable: parsed.reimbursable !== false,
+    }
+  }
+
+  async function analyzeSmartText(inputText = smartText) {
+    const text = inputText.trim()
+    if (!text) return
+    setAnalyzing(true)
+    setError('')
+    try {
+      const parsed = await fetchJson<AiParsedExpense>('/api/ai/parse-expense', {
+        method: 'POST',
+        body: JSON.stringify({
+          text,
+          today: todayISO(),
+          now: nowTime(),
+          categories: activeCategories.map((c) => ({ id: c.id, name: c.name })),
+          trips: trips.map((t) => ({ id: t.id, name: t.name, destination: t.destination })),
+          default_trip_id: form.trip_id || getPreferredTripId(trips),
+        }),
+      })
+      setSmartDraft(normalizeAiDraft(parsed, text))
+      setVoiceStatus('智能解析已完成，请确认账单明细')
+    } catch (e: any) {
+      setSmartDraft(parseSmartRecord(text))
+      setError(`${friendlyErrorMessage(e, '智能解析不可用')}，已使用本地规则兜底`)
+      setVoiceStatus('智能解析暂不可用，已用本地规则生成草稿')
+    } finally {
+      setAnalyzing(false)
+    }
+  }
+
+  async function addSmartDraft() {
+    if (!smartDraft) return
+    setSaving(true)
+    setError('')
+    try {
+      await fetchJson<Expense>('/api/expenses', {
+        method: 'POST',
+        body: JSON.stringify(formToPayload(smartDraft)),
+      })
+      await loadData()
+      setForm(makeAccountBlankForm(activeCategories[0]?.id || '', getPreferredTripId(trips)))
+      setSmartDraft(null)
+      setSmartText('')
+      setSmartOpen(false)
+      setActiveTab('record')
+    } catch (e: any) {
+      setError(friendlyErrorMessage(e, '添加账单失败'))
+    } finally {
+      setSaving(false)
+    }
+  }
+
   function startVoiceTimer() {
     stopVoiceTimer()
     setRecordingSeconds(0)
-    voiceTimerRef.current = window.setInterval(() => {
-      setRecordingSeconds((value) => value + 1)
-    }, 1000)
+    voiceTimerRef.current = window.setInterval(() => { setRecordingSeconds((v) => v + 1) }, 1000)
   }
 
   function stopVoiceTimer() {
@@ -983,107 +1023,9 @@ export function MoneyApp() {
     setSmartOpen(true)
   }
 
-  function normalizeAiDraft(parsed: AiParsedExpense, sourceText = smartText) {
-    return {
-      ...makeBlankForm(parsed.category_id || activeCategories[0]?.id || '', parsed.trip_id || form.trip_id || getPreferredTripId(trips)),
-      ...parsed,
-      amount: parsed.amount === undefined || parsed.amount === null ? '' : String(parsed.amount),
-      merchant: parsed.merchant || '',
-      note: parsed.note || sourceText,
-      receipt_url: parsed.receipt_url || '',
-      expense_date: parsed.expense_date || todayISO(),
-      expense_time: parsed.expense_time || nowTime(),
-      payment_method: normalizePaymentMethod(parsed.payment_method || ''),
-      invoice_status: normalizeInvoiceStatus(parsed.invoice_status || ''),
-      reimbursement_status: parsed.reimbursement_status || 'pending',
-      reimbursable: parsed.reimbursable !== false,
-    }
-  }
-
-  async function analyzeSmartText(inputText = smartText) {
-    const text = inputText.trim()
-    if (!text) return
-    setAnalyzing(true)
-    setError('')
-    try {
-      const parsed = await fetchJson<AiParsedExpense>('/api/ai/parse-expense', {
-        method: 'POST',
-        body: JSON.stringify({
-          text,
-          today: todayISO(),
-          now: nowTime(),
-          categories: activeCategories.map((category) => ({ id: category.id, name: category.name })),
-          trips: trips.map((trip) => ({ id: trip.id, name: trip.name, destination: trip.destination })),
-          default_trip_id: form.trip_id || getPreferredTripId(trips),
-        }),
-      })
-      setSmartDraft(normalizeAiDraft(parsed, text))
-      setVoiceStatus('智能解析已完成，请确认账单明细')
-    } catch (e: any) {
-      setSmartDraft(parseSmartRecord(text))
-      setError(`${friendlyErrorMessage(e, '智能解析不可用')}，已使用本地规则兜底`)
-      setVoiceStatus('智能解析暂不可用，已用本地规则生成草稿')
-    } finally {
-      setAnalyzing(false)
-    }
-  }
-
-  async function addSmartDraft() {
-    if (!smartDraft) return
-    setSaving(true)
-    setError('')
-    try {
-      await fetchJson<Expense>('/api/expenses', {
-        method: 'POST',
-        body: JSON.stringify(formToPayload(smartDraft)),
-      })
-      await loadData()
-      setForm(makeAccountBlankForm(activeCategories[0]?.id || '', getPreferredTripId(trips)))
-      setSmartDraft(null)
-      setSmartText('')
-      setSmartOpen(false)
-      setActiveTab('record')
-    } catch (e: any) {
-      setError(friendlyErrorMessage(e, '添加账单失败'))
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  async function completeVoiceAndAnalyze() {
-    setAnalyzing(true)
-    setVoiceStatus('正在结束识别...')
-    stopBrowserRecognition()
-    stopVoiceTimer()
-    setListening(false)
-
-    try {
-      const transcript = smartText.trim()
-      if (!transcript) {
-        setVoiceStatus('没有识别到内容，可以直接在下方输入后解析')
-        return
-      }
-      const hasNewVoiceText = Boolean(voiceRecognizedTextRef.current.trim())
-      const hasManualEdit = voiceManualEditedRef.current
-      const isOriginalText = transcript === voiceSessionStartTextRef.current.trim()
-      if (!hasNewVoiceText && !hasManualEdit && isOriginalText) {
-        setVoiceStatus('没有识别到新的内容，已保留原文本，可以手动修改后解析')
-        return
-      }
-      setVoiceStatus('正在智能解析账单...')
-      await analyzeSmartText(transcript)
-    } catch (e: any) {
-      setError(friendlyErrorMessage(e, '语音解析失败'))
-      setVoiceStatus('语音解析失败，可以再试一次或切到文字输入')
-    } finally {
-      setAnalyzing(false)
-    }
-  }
-
   function startBrowserRecognition() {
     const Recognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
     if (!Recognition) return false
-
     const recognition = new Recognition()
     speechRecognitionRef.current = recognition
     recognition.lang = 'zh-CN'
@@ -1117,13 +1059,7 @@ export function MoneyApp() {
       setListening(false)
       stopVoiceTimer()
     }
-    try {
-      recognition.start()
-      return true
-    } catch {
-      speechRecognitionRef.current = null
-      return false
-    }
+    try { recognition.start(); return true } catch { speechRecognitionRef.current = null; return false }
   }
 
   async function startSpeech() {
@@ -1136,7 +1072,6 @@ export function MoneyApp() {
     voiceSessionStartTextRef.current = smartText
     voiceRecognizedTextRef.current = ''
     voiceManualEditedRef.current = false
-
     const speechStarted = startBrowserRecognition()
     if (!speechStarted) setVoiceStatus('当前浏览器不支持实时语音识别，可以直接在下方输入文字后解析')
   }
@@ -1151,7 +1086,6 @@ export function MoneyApp() {
     voiceSessionStartTextRef.current = smartText
     voiceRecognizedTextRef.current = ''
     voiceManualEditedRef.current = false
-
     const speechStarted = startBrowserRecognition()
     if (!speechStarted) setVoiceStatus('当前浏览器不支持实时语音识别，可以直接输入文字后解析')
   }
@@ -1163,91 +1097,33 @@ export function MoneyApp() {
     setVoiceStatus(smartText.trim() ? '语音输入已填入，可以继续修改或解析' : '没有识别到内容，可以再试一次')
   }
 
-  function getCategoryUsageCount(categoryId: string) {
-    return expenses.filter((expense) => expense.category_id === categoryId).length
-  }
-
-  function getTripUsageCount(tripId: string) {
-    return expenses.filter((expense) => expense.trip_id === tripId).length
-  }
-
-  function getPaymentMethodUsageCount(methodName: string) {
-    return expenses.filter((expense) => expense.payment_method === methodName).length
-  }
-
-  function getInvoiceStatusUsageCount(statusValue: string) {
-    return expenses.filter((expense) => expense.invoice_status === statusValue).length
-  }
-
-  function getExportExpenses(tripId = exportTripId) {
-    return tripId ? expenses.filter((expense) => expense.trip_id === tripId) : expenses
-  }
-
-  function getExportLabel(tripId = exportTripId) {
-    return trips.find((trip) => trip.id === tripId)?.name || '全部行程'
-  }
-
-  function buildExportData(expensesToExport: Expense[]) {
-    const receiptFiles: ZipFile[] = []
-    const receiptPaths = new Map<string, string>()
-
-    for (const expense of expensesToExport) {
-      const receiptFile = createReceiptZipFile(expense)
-      if (!receiptFile) continue
-      receiptFiles.push(receiptFile)
-      receiptPaths.set(expense.id, receiptFile.name)
-    }
-
-    const rows = [
-      ['日期', '时间', '行程', '目的地', '分类', '标题', '商户', '金额', '支付方式', '发票', '报销状态', '备注', '票据文件', '票据链接'],
-      ...expensesToExport.map((expense) => [
-        expense.expense_date,
-        expense.expense_time || '',
-        expense.trip_name || '',
-        expense.destination || '',
-        expense.category_name || '',
-        expense.title,
-        expense.merchant || '',
-        expense.amount,
-        expense.payment_method,
-        invoiceLabelMap[expense.invoice_status] || expense.invoice_status,
-        reimbursementLabels[expense.reimbursement_status] || expense.reimbursement_status,
-        expense.note || '',
-        receiptPaths.get(expense.id) || '',
-        expense.receipt_url && !expense.receipt_url.startsWith('data:') ? expense.receipt_url : '',
-      ]),
-    ]
-
-    return {
-      csv: rows.map((row) => row.map(escapeCsv).join(',')).join('\n'),
-      receiptFiles,
+  async function completeVoiceAndAnalyze() {
+    setAnalyzing(true)
+    setVoiceStatus('正在结束识别...')
+    stopBrowserRecognition()
+    stopVoiceTimer()
+    setListening(false)
+    try {
+      const transcript = smartText.trim()
+      if (!transcript) { setVoiceStatus('没有识别到内容，可以直接在下方输入后解析'); return }
+      const hasNewVoiceText = Boolean(voiceRecognizedTextRef.current.trim())
+      const hasManualEdit = voiceManualEditedRef.current
+      const isOriginalText = transcript === voiceSessionStartTextRef.current.trim()
+      if (!hasNewVoiceText && !hasManualEdit && isOriginalText) {
+        setVoiceStatus('没有识别到新的内容，已保留原文本，可以手动修改后解析')
+        return
+      }
+      setVoiceStatus('正在智能解析账单...')
+      await analyzeSmartText(transcript)
+    } catch (e: any) {
+      setError(friendlyErrorMessage(e, '语音解析失败'))
+      setVoiceStatus('语音解析失败，可以再试一次或切到文字输入')
+    } finally {
+      setAnalyzing(false)
     }
   }
 
-  function downloadCsv(expensesToExport: Expense[], label: string) {
-    if (!expensesToExport.length) {
-      setError('没有可导出的账单')
-      return
-    }
-    const { csv } = buildExportData(expensesToExport)
-    downloadBlob(new Blob([`\ufeff${csv}`], { type: 'text/csv;charset=utf-8' }), `记账-${safeFileName(label)}-${todayISO()}.csv`)
-  }
-
-  function exportCsv(tripId = exportTripId) {
-    downloadCsv(getExportExpenses(tripId), getExportLabel(tripId))
-  }
-
-  function exportZip(tripId = exportTripId) {
-    const exportExpenses = getExportExpenses(tripId)
-    if (!exportExpenses.length) {
-      setError('没有可导出的账单')
-      return
-    }
-    const { csv, receiptFiles } = buildExportData(exportExpenses)
-    const csvFile = { name: 'ledger.csv', data: new TextEncoder().encode(`\ufeff${csv}`) }
-    downloadBlob(createZipArchive([csvFile, ...receiptFiles]), `记账-${safeFileName(getExportLabel(tripId))}-${todayISO()}.zip`)
-  }
-
+  // ─── 渲染 ─────────────────────────────────────────────────
   const manualForm = (
     <ManualExpenseForm
       activeCategories={activeCategories}
@@ -1272,10 +1148,7 @@ export function MoneyApp() {
   }
 
   if (!user) {
-    return <LoginScreen onLogin={() => {
-      setActiveTab('record')
-      loadData()
-    }} />
+    return <LoginScreen onLogin={() => { setActiveTab('record'); loadData() }} />
   }
 
   return (
@@ -1293,6 +1166,7 @@ export function MoneyApp() {
               </Button>
             </div>
           ) : null}
+
           {activeTab === 'record' ? (
             <RecordPage
               totals={totals}
@@ -1311,9 +1185,65 @@ export function MoneyApp() {
               onQuickStatus={quickStatus}
             />
           ) : null}
+
           {activeTab === 'stats' ? <StatsPage totals={totals} stats={stats} /> : null}
-          {activeTab === 'history' ? HistoryView() : null}
-          {activeTab === 'settings' ? SettingsView() : null}
+
+          {activeTab === 'history' ? (
+            <HistoryView
+              groupedExpenses={groupedExpenses}
+              filteredExpenses={filteredExpenses}
+              search={search}
+              historyFilter={historyFilter}
+              batchSelecting={batchSelecting}
+              selectedExpenseIdSet={selectedExpenseIdSet}
+              selectedExpenses={selectedExpenses}
+              selectedExpenseTotal={selectedExpenseTotal}
+              allFilteredExpensesSelected={allFilteredExpensesSelected}
+              loading={loading}
+              saving={saving}
+              invoiceLabelMap={invoiceLabelMap}
+              onSearchChange={setSearch}
+              onFilterChange={setHistoryFilter}
+              onToggleBatchSelecting={() => (batchSelecting ? exitBatchSelection() : setBatchSelecting(true))}
+              onToggleFilteredExpenseSelection={toggleFilteredExpenseSelection}
+              onToggleExpenseSelection={toggleExpenseSelection}
+              onRequestBatchUpdate={requestBatchUpdateReimbursementStatus}
+              onReload={loadData}
+              onEditExpense={editExpense}
+              onDeleteExpense={deleteExpense}
+              onQuickStatus={quickStatus}
+            />
+          ) : null}
+
+          {activeTab === 'settings' ? (
+            <SettingsView
+              user={user}
+              isDark={isDark}
+              settingsPanel={settingsPanel}
+              activeCategories={activeCategories}
+              trips={trips}
+              activePaymentMethods={activePaymentMethods}
+              activeInvoiceStatuses={activeInvoiceStatuses}
+              archivedItemCount={archivedItemCount}
+              adminUsers={adminUsers}
+              onSetSettingsPanel={setSettingsPanel}
+              onToggleTheme={(dark) => setTheme(dark ? 'dark' : 'light')}
+              onClearHistory={clearHistory}
+              onLogout={handleLogout}
+              onOpenUserPanel={() => {
+                setSettingsPanel('profile')
+                setOldPassword('')
+                setNewPassword('')
+                setConfirmPassword('')
+                setPwdError('')
+                setPwdSuccess('')
+                setShowOldPassword(false)
+                setShowNewPassword(false)
+                setShowConfirmPassword(false)
+              }}
+              onOpenUsersPanel={() => { setSettingsPanel('users'); fetchAdminUsers() }}
+            />
+          ) : null}
         </section>
 
         <aside className="hidden h-full overflow-y-auto border-l border-slate-200/80 bg-white/90 px-5 py-7 custom-scrollbar dark:border-white/10 dark:bg-white/[0.035] lg:block">
@@ -1333,1187 +1263,116 @@ export function MoneyApp() {
       </div>
 
       <BottomNav activeTab={activeTab} setActiveTab={setActiveTab} />
-      {SettingsPanelView()}
-      {BatchConfirmDialog()}
-      {SmartDialog()}
+
+      <SettingsPanelDrawer
+        settingsPanel={settingsPanel}
+        user={user}
+        saving={saving}
+        expenses={expenses}
+        activeCategories={activeCategories}
+        archivedCategories={archivedCategories}
+        categoryForm={categoryForm}
+        onCategoryFormChange={setCategoryForm}
+        onSaveCategory={saveCategory}
+        onDisableCategory={disableCategory}
+        onDeleteArchivedCategory={deleteArchivedCategory}
+        trips={trips}
+        archivedTrips={archivedTrips}
+        tripForm={tripForm}
+        editingTripId={editingTripId}
+        onTripFormChange={setTripForm}
+        onSaveTrip={saveTrip}
+        onBeginEditTrip={beginEditTrip}
+        onCancelEditTrip={cancelEditTrip}
+        onArchiveTrip={archiveTrip}
+        onDeleteArchivedTrip={deleteArchivedTrip}
+        accountPaymentMethods={accountPaymentMethods}
+        activePaymentMethods={activePaymentMethods}
+        paymentMethodForm={paymentMethodForm}
+        editingPaymentMethodId={editingPaymentMethodId}
+        onPaymentMethodFormChange={setPaymentMethodForm}
+        onSavePaymentMethod={savePaymentMethod}
+        onBeginEditPaymentMethod={beginEditPaymentMethod}
+        onCancelEditPaymentMethod={cancelEditPaymentMethod}
+        onDeletePaymentMethod={deletePaymentMethod}
+        accountInvoiceStatuses={accountInvoiceStatuses}
+        activeInvoiceStatuses={activeInvoiceStatuses}
+        invoiceStatusForm={invoiceStatusForm}
+        editingInvoiceStatusId={editingInvoiceStatusId}
+        onInvoiceStatusFormChange={setInvoiceStatusForm}
+        onSaveInvoiceStatus={saveInvoiceStatus}
+        onBeginEditInvoiceStatus={beginEditInvoiceStatus}
+        onCancelEditInvoiceStatus={cancelEditInvoiceStatus}
+        onDeleteInvoiceStatus={deleteInvoiceStatus}
+        oldPassword={oldPassword}
+        newPassword={newPassword}
+        confirmPassword={confirmPassword}
+        pwdLoading={pwdLoading}
+        pwdError={pwdError}
+        pwdSuccess={pwdSuccess}
+        showOldPassword={showOldPassword}
+        showNewPassword={showNewPassword}
+        showConfirmPassword={showConfirmPassword}
+        onOldPasswordChange={setOldPassword}
+        onNewPasswordChange={setNewPassword}
+        onConfirmPasswordChange={setConfirmPassword}
+        onToggleShowOldPassword={() => setShowOldPassword((v) => !v)}
+        onToggleShowNewPassword={() => setShowNewPassword((v) => !v)}
+        onToggleShowConfirmPassword={() => setShowConfirmPassword((v) => !v)}
+        onPasswordChange={handlePasswordChange}
+        adminUsers={adminUsers}
+        adminUsersLoading={adminUsersLoading}
+        adminResetUserId={adminResetUserId}
+        adminNewPassword={adminNewPassword}
+        adminResetError={adminResetError}
+        adminResetSuccess={adminResetSuccess}
+        adminResetLoading={adminResetLoading}
+        showAdminResetPassword={showAdminResetPassword}
+        onSetAdminResetUserId={setAdminResetUserId}
+        onAdminNewPasswordChange={setAdminNewPassword}
+        onToggleShowAdminResetPassword={() => setShowAdminResetPassword((v) => !v)}
+        onAdminResetPassword={handleAdminResetPassword}
+        onAdminDeleteUser={handleAdminDeleteUser}
+        onClose={() => setSettingsPanel(null)}
+      />
+
+      <BatchConfirmDialog
+        batchConfirmStatus={batchConfirmStatus}
+        selectedExpenses={selectedExpenses}
+        selectedExpenseTotal={selectedExpenseTotal}
+        saving={saving}
+        onCancel={() => setBatchConfirmStatus(null)}
+        onConfirm={confirmBatchUpdateReimbursementStatus}
+      />
+
+      <SmartDialog
+        smartOpen={smartOpen}
+        smartMode={smartMode}
+        smartText={smartText}
+        smartDraft={smartDraft}
+        listening={listening}
+        analyzing={analyzing}
+        saving={saving}
+        recordingSeconds={recordingSeconds}
+        voiceStatus={voiceStatus}
+        activeCategories={activeCategories}
+        trips={trips}
+        activeInvoiceStatuses={activeInvoiceStatuses}
+        invoiceLabelMap={invoiceLabelMap}
+        onClose={closeSmartDialog}
+        onSmartTextChange={(text) => {
+          setSmartText(text)
+          setSmartDraft(null)
+        }}
+        onDiscardVoiceSession={discardVoiceSession}
+        onStartInlineSpeech={startInlineSpeech}
+        onStopInlineSpeech={stopInlineSpeech}
+        onStartSpeech={startSpeech}
+        onCompleteVoiceAndAnalyze={completeVoiceAndAnalyze}
+        onAnalyzeSmartText={() => { discardVoiceSession(); void analyzeSmartText() }}
+        onPatchSmartDraft={patchSmartDraft}
+        onAddSmartDraft={addSmartDraft}
+      />
     </main>
   )
-
-  function HistoryView() {
-    return (
-      <div className="mx-auto max-w-[430px] space-y-3.5 lg:max-w-5xl">
-        <div className="flex items-center justify-between gap-3">
-          <h2 className="text-2xl font-semibold tracking-normal text-slate-950 dark:text-white">历史</h2>
-          <div className="flex shrink-0 items-center gap-2">
-            <Button
-              type="button"
-              variant={batchSelecting ? 'default' : 'outline'}
-              className={cn(
-                'h-8 rounded-md px-2.5 text-sm font-semibold',
-                batchSelecting
-                  ? 'bg-emerald-600 text-white hover:bg-emerald-700 dark:bg-emerald-400 dark:text-slate-950 dark:hover:bg-emerald-300'
-                  : 'border-slate-200 bg-white/80 text-slate-700 shadow-sm dark:border-white/10 dark:bg-white/[0.06] dark:text-slate-100'
-              )}
-              onClick={batchSelecting ? exitBatchSelection : () => setBatchSelecting(true)}
-            >
-              {batchSelecting ? '完成' : '批量'}
-            </Button>
-            <Button type="button" variant="ghost" size="icon" className="h-8 w-8 text-slate-700 dark:text-slate-100" onClick={loadData} aria-label="同步">
-              <RefreshCcw className={cn('h-4 w-4', loading && 'animate-spin')} />
-            </Button>
-          </div>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="relative min-w-0 flex-[1_1_12rem]">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
-            <Input
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              placeholder="搜索标题、分类、金额"
-              className="h-11 rounded-lg border-slate-200/80 bg-white/80 pl-9 text-sm shadow-sm dark:border-white/10 dark:bg-white/[0.045]"
-            />
-          </div>
-
-          <select
-            value={historyFilter}
-            onChange={(event) => setHistoryFilter(event.target.value as HistoryFilter)}
-            className="h-11 w-[7.25rem] shrink-0 rounded-lg border border-slate-200/80 bg-white/80 px-3 text-sm font-semibold text-slate-700 shadow-sm outline-none transition hover:bg-white dark:border-white/10 dark:bg-white/[0.045] dark:text-slate-100 dark:hover:bg-white/[0.08]"
-            aria-label="历史筛选"
-          >
-            <option value="all">全部</option>
-            <option value="invoice">待开票</option>
-            <option value="reimbursement">待报销</option>
-            <option value="reimbursed">已报销</option>
-          </select>
-
-        </div>
-
-        {batchSelecting ? (
-          <div className="flex w-full min-w-0 items-center gap-2 overflow-x-auto rounded-lg border border-emerald-200/80 bg-white/90 px-3 py-2 shadow-sm backdrop-blur dark:border-emerald-400/20 dark:bg-white/[0.055]">
-            <label className="flex h-8 shrink-0 cursor-pointer items-center gap-1.5 rounded-md border border-emerald-200 bg-emerald-50 px-2.5 text-xs font-medium text-emerald-700 transition hover:bg-emerald-100 dark:border-emerald-400/30 dark:bg-emerald-400/10 dark:text-emerald-100 dark:hover:bg-emerald-400/15">
-              <input
-                type="checkbox"
-                checked={allFilteredExpensesSelected}
-                onChange={toggleFilteredExpenseSelection}
-                disabled={!filteredExpenses.length}
-                className="h-3.5 w-3.5 accent-emerald-600"
-                aria-label="全选当前列表"
-              />
-              全选
-            </label>
-            <div className="min-w-[10rem] flex-1 whitespace-nowrap border-l border-slate-200 pl-3 text-right sm:text-left dark:border-white/10">
-              <span className="text-xs font-medium text-slate-500 dark:text-slate-400">已选 {selectedExpenses.length} 笔</span>
-              <span className="ml-2 text-base font-semibold text-slate-950 dark:text-white">{formatMoney(selectedExpenseTotal)}</span>
-            </div>
-            <div className="flex shrink-0 items-center gap-1.5">
-              <Button type="button" className="h-8 rounded-md bg-emerald-600 px-3 text-xs text-white hover:bg-emerald-700 disabled:opacity-50 dark:bg-emerald-400 dark:text-slate-950 dark:hover:bg-emerald-300" onClick={() => requestBatchUpdateReimbursementStatus('reimbursed')} disabled={saving || !selectedExpenses.length}>
-                已报销
-              </Button>
-              <Button type="button" className="h-8 rounded-md bg-amber-500 px-3 text-xs text-white hover:bg-amber-600 disabled:opacity-50 dark:bg-amber-300 dark:text-slate-950 dark:hover:bg-amber-200" onClick={() => requestBatchUpdateReimbursementStatus('pending')} disabled={saving || !selectedExpenses.length}>
-                未报销
-              </Button>
-            </div>
-          </div>
-        ) : null}
-
-        <div className="space-y-3">
-          {groupedExpenses.length ? (
-            groupedExpenses.map(([date, list]) => (
-              <Card key={date} className="overflow-hidden rounded-lg border-slate-200/80 bg-white/80 shadow-[0_10px_24px_rgba(15,23,42,0.06)] backdrop-blur dark:border-white/10 dark:bg-white/[0.045] dark:shadow-none">
-                <div className="flex items-center justify-between border-b border-slate-200/80 px-3 py-2.5 dark:border-white/10">
-                  <h3 className="font-semibold text-slate-950 dark:text-white">{date.replaceAll('-', '/')}</h3>
-                  <span className="text-sm font-semibold text-red-500">-{formatMoney(list.reduce((sum, item) => sum + Number(item.amount || 0), 0)).replace('¥ ', '¥')}</span>
-                </div>
-                <div className="divide-y divide-slate-200/80 dark:divide-white/10">
-                  {list.map((expense) => (
-                    <ExpenseItemRow
-                      key={expense.id}
-                      expense={expense}
-                      compact
-                      showActions
-                      selectable={batchSelecting}
-                      selected={selectedExpenseIdSet.has(expense.id)}
-                      invoiceLabelMap={invoiceLabelMap}
-                      onToggleSelected={toggleExpenseSelection}
-                      onEdit={editExpense}
-                      onDelete={deleteExpense}
-                      onQuickStatus={quickStatus}
-                    />
-                  ))}
-                </div>
-              </Card>
-            ))
-          ) : (
-            <EmptyState icon={Search} title="没有匹配记录" detail="换一个关键词，或者先添加一笔账单。" />
-          )}
-        </div>
-
-      </div>
-    )
-  }
-
-  function SettingsView() {
-    return (
-      <div className="mx-auto max-w-[430px] space-y-4 lg:max-w-5xl">
-        <h2 className="text-2xl font-semibold tracking-normal text-slate-950 dark:text-white">设置</h2>
-
-        <Card className="rounded-lg border-slate-200/80 bg-white/80 p-4 shadow-[0_10px_24px_rgba(15,23,42,0.06)] backdrop-blur dark:border-white/10 dark:bg-white/[0.045] dark:shadow-none">
-          <div className="flex items-center gap-3">
-            <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-emerald-100 text-emerald-700 dark:bg-emerald-400/15 dark:text-emerald-300">
-              <User className="h-7 w-7" />
-            </span>
-            <div className="min-w-0 flex-1">
-              <p className="font-semibold text-slate-950 dark:text-white">用户信息</p>
-              <p className="mt-0.5 text-sm text-slate-500 dark:text-slate-400">用户名: {user?.username}</p>
-            </div>
-            <Button type="button" variant="ghost" size="icon" className="h-8 w-8 text-slate-400" onClick={() => {
-              setSettingsPanel('profile')
-              setOldPassword('')
-              setNewPassword('')
-              setConfirmPassword('')
-              setPwdError('')
-              setPwdSuccess('')
-              setShowOldPassword(false)
-              setShowNewPassword(false)
-              setShowConfirmPassword(false)
-            }} aria-label="查看用户信息">
-              <ChevronRight className="h-5 w-5" />
-            </Button>
-          </div>
-        </Card>
-
-        <SettingGroup title="账本设置">
-          <SettingRow icon={SlidersHorizontal} label="分类管理" detail={`${activeCategories.length} 个可用分类`} active={settingsPanel === 'categories'} onClick={() => setSettingsPanel('categories')} />
-          <SettingRow icon={MapPin} label="行程管理" detail={`${trips.length} 个行程`} active={settingsPanel === 'trips'} onClick={() => setSettingsPanel('trips')} />
-          <SettingRow icon={CreditCard} label="支付方式" detail={`${activePaymentMethods.length} 种方式`} active={settingsPanel === 'payment'} onClick={() => setSettingsPanel('payment')} />
-          <SettingRow icon={FileCheck2} label="发票状态" detail={activeInvoiceStatuses.map((status) => status.label).join(' / ') || '暂无状态'} active={settingsPanel === 'invoice'} onClick={() => setSettingsPanel('invoice')} />
-        </SettingGroup>
-
-        <SettingGroup title="数据管理">
-          <SettingRow icon={Archive} label="归档数据" detail={`${archivedItemCount} 项归档`} active={settingsPanel === 'archive'} onClick={() => setSettingsPanel('archive')} />
-          <SettingRow icon={Trash2} label="清空历史数据" danger detail="保留分类与行程" onClick={clearHistory} />
-        </SettingGroup>
-
-        {user?.username === 'admin' ? (
-          <SettingGroup title="系统管理">
-            <SettingRow icon={Users} label="账户管理" detail={`${adminUsers.length || '查看'} 个注册用户`} active={settingsPanel === 'users'} onClick={() => {
-              setSettingsPanel('users')
-              fetchAdminUsers()
-            }} />
-          </SettingGroup>
-        ) : null}
-
-        <SettingGroup title="外观">
-          <div className="flex h-14 items-center justify-between px-4">
-            <span className="flex items-center gap-3 text-sm font-medium text-slate-900 dark:text-slate-100">
-              {isDark ? <Moon className="h-5 w-5" /> : <Sun className="h-5 w-5" />}
-              {isDark ? '黑暗皮肤' : '白天皮肤'}
-            </span>
-            <Switch checked={isDark} onCheckedChange={(checked) => setTheme(checked ? 'dark' : 'light')} aria-label="切换皮肤" />
-          </div>
-        </SettingGroup>
-
-        <Button
-          type="button"
-          variant="outline"
-          onClick={handleLogout}
-          className="mt-4 h-11 w-full border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700 dark:border-red-500/20 dark:text-red-400 dark:hover:bg-red-500/10"
-        >
-          退出登录
-        </Button>
-        <p className="pt-2 text-center text-xs text-slate-400">Travel Ledger · v1.0</p>
-      </div>
-    )
-  }
-
-  function SettingGroup({ title, children }: { title: string; children: ReactNode }) {
-    return (
-      <section>
-        <h3 className="mb-2 px-1 text-sm font-medium text-slate-500 dark:text-slate-400">{title}</h3>
-        <Card className="overflow-hidden rounded-lg border-slate-200/80 bg-white/80 shadow-[0_10px_24px_rgba(15,23,42,0.06)] backdrop-blur dark:border-white/10 dark:bg-white/[0.045] dark:shadow-none">
-          <div className="divide-y divide-slate-200/80 dark:divide-white/10">{children}</div>
-        </Card>
-      </section>
-    )
-  }
-
-  function SettingRow({
-    icon: Icon,
-    label,
-    detail,
-    danger = false,
-    active = false,
-    onClick,
-  }: {
-    icon: ComponentType<{ className?: string }>
-    label: string
-    detail?: string
-    danger?: boolean
-    active?: boolean
-    onClick?: () => void
-  }) {
-    return (
-      <Button
-        type="button"
-        variant="ghost"
-        className={cn(
-          'h-auto w-full justify-start rounded-none px-4 py-3.5 text-left hover:bg-slate-50 dark:hover:bg-white/[0.06]',
-          active && 'bg-emerald-50/80 dark:bg-emerald-400/10'
-        )}
-        onClick={onClick}
-      >
-        <Icon className={cn('h-5 w-5 shrink-0', danger ? 'text-red-500' : 'text-slate-800 dark:text-slate-100')} />
-        <span className="min-w-0 flex-1">
-          <span className={cn('block text-sm font-medium', danger ? 'text-red-500' : 'text-slate-900 dark:text-slate-100')}>{label}</span>
-          {detail ? <span className="mt-0.5 block truncate text-xs font-normal text-slate-500 dark:text-slate-400">{detail}</span> : null}
-        </span>
-        <ChevronRight className="ml-auto h-4 w-4 shrink-0 text-slate-400" />
-      </Button>
-    )
-  }
-
-  function SettingsPanelView() {
-    if (!settingsPanel) return null
-
-    const titleMap: Record<Exclude<SettingsPanel, null>, string> = {
-      profile: '用户信息',
-      categories: '分类管理',
-      trips: '行程管理',
-      archive: '归档数据',
-      payment: '支付方式',
-      invoice: '发票状态',
-      users: '账户管理',
-    }
-
-    return (
-      <div className="fixed inset-0 z-50 flex justify-end bg-slate-950/35 backdrop-blur-sm animate-in fade-in duration-200 dark:bg-black/65" role="dialog" aria-modal="true" aria-label={titleMap[settingsPanel]}>
-        <button type="button" className="absolute inset-0 cursor-default" aria-label="关闭设置面板" onClick={() => setSettingsPanel(null)} />
-        <div className="relative z-10 flex h-dvh w-full max-w-[430px] flex-col border-l border-slate-200/80 bg-[#f7f8f5] shadow-[0_24px_80px_rgba(15,23,42,0.24)] animate-in slide-in-from-right duration-200 dark:border-white/10 dark:bg-[#090d18] sm:m-4 sm:h-[calc(100dvh-2rem)] sm:rounded-xl sm:border">
-          <div className="border-b border-slate-200/80 px-4 pb-4 pt-[max(env(safe-area-inset-top),1rem)] dark:border-white/10 sm:pt-4">
-            <h3 className="text-xl font-semibold tracking-normal text-slate-950 dark:text-white">{titleMap[settingsPanel]}</h3>
-          </div>
-          <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4 custom-scrollbar">
-
-            {settingsPanel === 'profile' ? (
-              <div className="space-y-5">
-                <div className="rounded-lg border border-slate-200/80 bg-white/70 p-4 dark:border-white/10 dark:bg-black/15">
-                  <p className="text-xs text-slate-500 dark:text-slate-400">当前登录用户</p>
-                  <p className="mt-1 text-lg font-bold text-slate-900 dark:text-white">{user?.username}</p>
-                  
-                  <div className="mt-4 grid grid-cols-3 gap-2 border-t border-slate-100 pt-4 dark:border-white/5">
-                    <MiniStat label="账单" value={`${expenses.length} 笔`} />
-                    <MiniStat label="分类" value={`${activeCategories.length} 个`} />
-                    <MiniStat label="行程" value={`${trips.length} 个`} />
-                  </div>
-                </div>
-
-                <form onSubmit={handlePasswordChange} className="space-y-3.5 rounded-lg border border-slate-200/80 bg-white/70 p-4 dark:border-white/10 dark:bg-black/15">
-                  <h4 className="text-sm font-bold text-slate-900 dark:text-white">修改密码</h4>
-                  
-                  <div>
-                    <label className="mb-1 block text-xs text-slate-500 dark:text-slate-400">当前密码</label>
-                    <div className="relative">
-                      <Input
-                        type={showOldPassword ? 'text' : 'password'}
-                        value={oldPassword}
-                        onChange={(e) => setOldPassword(e.target.value)}
-                        placeholder="请输入当前密码"
-                        required
-                        className="h-9 pr-10"
-                      />
-                      <button
-                        type="button"
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
-                        onClick={() => setShowOldPassword(!showOldPassword)}
-                      >
-                        {showOldPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                      </button>
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="mb-1 block text-xs text-slate-500 dark:text-slate-400">新密码</label>
-                    <div className="relative">
-                      <Input
-                        type={showNewPassword ? 'text' : 'password'}
-                        value={newPassword}
-                        onChange={(e) => setNewPassword(e.target.value)}
-                        placeholder="请输入新密码 (至少 2 位)"
-                        required
-                        className="h-9 pr-10"
-                      />
-                      <button
-                        type="button"
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
-                        onClick={() => setShowNewPassword(!showNewPassword)}
-                      >
-                        {showNewPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                      </button>
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="mb-1 block text-xs text-slate-500 dark:text-slate-400">确认新密码</label>
-                    <div className="relative">
-                      <Input
-                        type={showConfirmPassword ? 'text' : 'password'}
-                        value={confirmPassword}
-                        onChange={(e) => setConfirmPassword(e.target.value)}
-                        placeholder="请再次输入新密码"
-                        required
-                        className="h-9 pr-10"
-                      />
-                      <button
-                        type="button"
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
-                        onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                      >
-                        {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                      </button>
-                    </div>
-                  </div>
-
-                  {pwdError && <p className="text-xs font-semibold text-red-500">{pwdError}</p>}
-                  {pwdSuccess && <p className="text-xs font-semibold text-emerald-600 dark:text-emerald-400">{pwdSuccess}</p>}
-
-                  <Button type="submit" disabled={pwdLoading || !oldPassword || !newPassword || !confirmPassword} className="h-9 w-full bg-emerald-600 hover:bg-emerald-700 dark:bg-emerald-500 dark:hover:bg-emerald-600">
-                    {pwdLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                    确认修改
-                  </Button>
-                </form>
-              </div>
-            ) : null}
-
-            {settingsPanel === 'users' ? (
-              <div className="space-y-4">
-                {adminUsersLoading ? (
-                  <div className="flex justify-center py-8">
-                    <Loader2 className="h-6 w-6 animate-spin text-emerald-600" />
-                  </div>
-                ) : (
-                  <div className="space-y-3">
-                    {adminUsers.map((u) => (
-                      <div key={u.id} className="rounded-lg border border-slate-200/80 bg-white/70 p-3.5 dark:border-white/10 dark:bg-black/15">
-                        <div className="flex items-start justify-between gap-3">
-                          <div>
-                            <p className="font-bold text-slate-900 dark:text-white">
-                              {u.username} 
-                              {u.username === 'admin' ? <span className="ml-1.5 rounded bg-emerald-100 px-1.5 py-0.5 text-[0.65rem] font-medium text-emerald-800 dark:bg-emerald-500/20 dark:text-emerald-300">管理员</span> : null}
-                            </p>
-                            <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">注册时间: {new Date(u.created_at).toLocaleDateString()}</p>
-                          </div>
-                          
-                          {u.username !== 'admin' ? (
-                            <div className="flex gap-2">
-                              <Button type="button" variant="outline" size="sm" className="h-7 text-xs border-emerald-200 text-emerald-600 hover:bg-emerald-50 dark:border-emerald-500/20 dark:text-emerald-400 dark:hover:bg-emerald-500/10" onClick={() => {
-                                setAdminResetUserId(u.id)
-                                setAdminNewPassword('')
-                                setAdminResetError('')
-                                setAdminResetSuccess('')
-                                setShowAdminResetPassword(false)
-                              }}>
-                                重置
-                              </Button>
-                              <Button type="button" variant="ghost" size="sm" className="h-7 text-xs text-red-500 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-500/10" onClick={() => handleAdminDeleteUser(u.id)}>
-                                删除
-                              </Button>
-                            </div>
-                          ) : null}
-                        </div>
-
-                        <div className="mt-3.5 grid grid-cols-3 gap-2 border-t border-slate-100 pt-2.5 dark:border-white/5 text-center text-xs">
-                          <div>
-                            <p className="text-slate-400">账单数</p>
-                            <p className="mt-0.5 font-semibold text-slate-700 dark:text-slate-200">{u.expenses_count}</p>
-                          </div>
-                          <div>
-                            <p className="text-slate-400">分类数</p>
-                            <p className="mt-0.5 font-semibold text-slate-700 dark:text-slate-200">{u.categories_count}</p>
-                          </div>
-                          <div>
-                            <p className="text-slate-400">行程数</p>
-                            <p className="mt-0.5 font-semibold text-slate-700 dark:text-slate-200">{u.trips_count}</p>
-                          </div>
-                        </div>
-
-                        {adminResetUserId === u.id ? (
-                          <div className="mt-3.5 border-t border-slate-100 pt-3 dark:border-white/5 space-y-2">
-                            <p className="text-xs font-semibold text-slate-800 dark:text-slate-200">为 {u.username} 重置密码</p>
-                            <div className="flex gap-2">
-                              <div className="relative flex-1">
-                                <Input
-                                  type={showAdminResetPassword ? 'text' : 'password'}
-                                  value={adminNewPassword}
-                                  onChange={(e) => setAdminNewPassword(e.target.value)}
-                                  placeholder="输入新密码 (至少2位)"
-                                  className="h-8 text-xs bg-white dark:bg-black/30 pr-8"
-                                  minLength={2}
-                                />
-                                <button
-                                  type="button"
-                                  className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
-                                  onClick={() => setShowAdminResetPassword(!showAdminResetPassword)}
-                                >
-                                  {showAdminResetPassword ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
-                                </button>
-                              </div>
-                              <Button type="button" size="sm" className="h-8 shrink-0 text-xs bg-emerald-600 text-white hover:bg-emerald-700" onClick={handleAdminResetPassword} disabled={adminResetLoading || adminNewPassword.length < 2}>
-                                {adminResetLoading ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : null}
-                                确认
-                              </Button>
-                              <Button type="button" variant="ghost" size="sm" className="h-8 text-xs" onClick={() => setAdminResetUserId(null)}>
-                                取消
-                              </Button>
-                            </div>
-                            {adminResetError && <p className="text-xs text-red-500 font-semibold">{adminResetError}</p>}
-                            {adminResetSuccess && <p className="text-xs text-emerald-600 font-semibold dark:text-emerald-400">{adminResetSuccess}</p>}
-                          </div>
-                        ) : null}
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            ) : null}
-
-            {settingsPanel === 'categories' ? (
-              <div className="space-y-3">
-                <MiniStat label="可用分类" value={`${activeCategories.length} 个`} />
-
-                <form onSubmit={saveCategory} className="space-y-2 rounded-lg border border-slate-200/80 bg-white/70 p-3 dark:border-white/10 dark:bg-black/15">
-                  <Input value={categoryForm.name} onChange={(event) => setCategoryForm((current) => ({ ...current, name: event.target.value }))} placeholder="分类名称" className="h-10" />
-                  <div className="grid grid-cols-2 gap-2">
-                    {categoryIconOptions.map((option) => {
-                      const Icon = getCategoryIcon(option.value)
-                      const selected = categoryForm.icon === option.value
-                      return (
-                        <Button
-                          key={option.value}
-                          type="button"
-                          variant="outline"
-                          className={cn(
-                            'h-11 justify-start rounded-md border-slate-200 bg-white px-3 text-slate-700 hover:bg-slate-50 dark:border-white/10 dark:bg-black/20 dark:text-slate-100 dark:hover:bg-white/10',
-                            selected && 'border-transparent text-white shadow-sm hover:text-white dark:border-transparent dark:text-white'
-                          )}
-                          style={selected ? { backgroundColor: categoryForm.color } : undefined}
-                          aria-pressed={selected}
-                          onClick={() => setCategoryForm((current) => ({ ...current, icon: option.value }))}
-                        >
-                          <Icon className="h-4 w-4 shrink-0" />
-                          <span className="min-w-0 truncate">{option.label}</span>
-                        </Button>
-                      )
-                    })}
-                  </div>
-                  <div className="flex items-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2 dark:border-white/10 dark:bg-black/20">
-                    <span className="min-w-0 flex-1 text-sm font-medium text-slate-600 dark:text-slate-300">分类颜色</span>
-                    <Input type="color" value={categoryForm.color} onChange={(event) => setCategoryForm((current) => ({ ...current, color: event.target.value }))} className="h-9 w-14 p-1" aria-label="分类颜色" />
-                  </div>
-                  <Button type="submit" className="h-10 w-full bg-emerald-600 text-white hover:bg-emerald-700" disabled={saving || !categoryForm.name.trim()}>
-                    <Plus className="h-4 w-4" />
-                    新增分类
-                  </Button>
-                </form>
-
-                <div className="grid gap-2">
-                  {activeCategories.map((category) => {
-                    const Icon = getCategoryIcon(category.icon)
-                    return (
-                      <div key={category.id} className="flex items-center gap-3 rounded-lg border border-slate-200/80 bg-white/70 px-3 py-2.5 dark:border-white/10 dark:bg-black/15">
-                        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-white" style={{ backgroundColor: category.color }}>
-                          <Icon className="h-4 w-4" />
-                        </span>
-                        <span className="min-w-0 flex-1 truncate text-sm font-medium">{category.name}</span>
-                        <Button type="button" variant="ghost" size="icon" className="h-8 w-8 text-slate-500" onClick={() => disableCategory(category)} aria-label={`停用${category.name}`}>
-                          <Archive className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    )
-                  })}
-                </div>
-              </div>
-            ) : null}
-
-            {settingsPanel === 'trips' ? (
-              <div className="space-y-3">
-                <MiniStat label="行程" value={`${trips.length} 个`} />
-                <form onSubmit={saveTrip} className="space-y-2 rounded-lg border border-slate-200/80 bg-white/70 p-3 dark:border-white/10 dark:bg-black/15">
-                  <Input value={tripForm.name} onChange={(event) => setTripForm((current) => ({ ...current, name: event.target.value }))} placeholder="行程名称" className="h-10" />
-                  <Input value={tripForm.destination} onChange={(event) => setTripForm((current) => ({ ...current, destination: event.target.value }))} placeholder="目的地（可选）" className="h-10" />
-                  <div className="grid grid-cols-2 gap-2">
-                    <Input type="date" value={tripForm.start_date} onChange={(event) => setTripForm((current) => ({ ...current, start_date: event.target.value }))} className="h-10" />
-                    <Input type="date" value={tripForm.end_date} onChange={(event) => setTripForm((current) => ({ ...current, end_date: event.target.value }))} className="h-10" />
-                  </div>
-                  <Input type="number" inputMode="decimal" min="0" step="0.01" value={tripForm.budget} onChange={(event) => setTripForm((current) => ({ ...current, budget: event.target.value }))} placeholder="预算（可选）" className="h-10" />
-                  <div className="flex gap-2">
-                    <Button type="submit" className="h-10 flex-1 bg-emerald-600 text-white hover:bg-emerald-700" disabled={saving || !tripForm.name.trim()}>
-                      <Plus className="h-4 w-4" />
-                      {editingTripId ? '保存行程' : '新增行程'}
-                    </Button>
-                    {editingTripId ? (
-                      <Button type="button" variant="outline" className="h-10 bg-white/70 dark:border-white/10 dark:bg-white/[0.045]" onClick={cancelEditTrip}>
-                        取消
-                      </Button>
-                    ) : null}
-                  </div>
-                </form>
-
-                <div className="grid gap-2">
-                  {trips.map((trip) => {
-                    const usageCount = getTripUsageCount(trip.id)
-                    return (
-                      <div key={trip.id} className="flex items-center gap-3 rounded-lg border border-slate-200/80 bg-white/70 px-3 py-2.5 dark:border-white/10 dark:bg-black/15">
-                        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-emerald-50 text-emerald-700 dark:bg-emerald-400/15 dark:text-emerald-200">
-                          <MapPin className="h-4 w-4" />
-                        </span>
-                        <span className="min-w-0 flex-1">
-                          <span className="block truncate text-sm font-medium">{trip.name}</span>
-                          <span className="block truncate text-xs text-slate-500 dark:text-slate-400">{trip.destination || '未设置目的地'} · {usageCount} 笔账单</span>
-                        </span>
-                        <Button type="button" variant="ghost" size="icon" className="h-8 w-8 text-slate-500" onClick={() => beginEditTrip(trip)} aria-label={`编辑${trip.name}`}>
-                          <Pencil className="h-4 w-4" />
-                        </Button>
-                        <Button type="button" variant="ghost" size="icon" className="h-8 w-8 text-slate-500" onClick={() => archiveTrip(trip)} aria-label={`归档${trip.name}`}>
-                          <Archive className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    )
-                  })}
-                </div>
-              </div>
-            ) : null}
-
-            {settingsPanel === 'payment' ? (
-              <div className="space-y-3">
-                <MiniStat label="可用支付方式" value={`${activePaymentMethods.length} 种`} />
-                <form onSubmit={savePaymentMethod} className="space-y-2 rounded-lg border border-slate-200/80 bg-white/70 p-3 dark:border-white/10 dark:bg-black/15">
-                  <Input value={paymentMethodForm} onChange={(event) => setPaymentMethodForm(event.target.value)} placeholder="支付方式名称" className="h-10" />
-                  <div className="flex gap-2">
-                    <Button type="submit" className="h-10 flex-1 bg-emerald-600 text-white hover:bg-emerald-700" disabled={saving || !paymentMethodForm.trim()}>
-                      <Plus className="h-4 w-4" />
-                      {editingPaymentMethodId ? '保存方式' : '新增方式'}
-                    </Button>
-                    {editingPaymentMethodId ? (
-                      <Button type="button" variant="outline" className="h-10 bg-white/70 dark:border-white/10 dark:bg-white/[0.045]" onClick={cancelEditPaymentMethod}>
-                        取消
-                      </Button>
-                    ) : null}
-                  </div>
-                </form>
-                <div className="grid gap-2">
-                  {activePaymentMethods.map((method) => {
-                    const usageCount = getPaymentMethodUsageCount(method.name)
-                    return (
-                      <div key={method.id} className="flex items-center gap-3 rounded-lg border border-slate-200/80 bg-white/70 px-3 py-2.5 dark:border-white/10 dark:bg-black/15">
-                        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-blue-50 text-blue-700 dark:bg-blue-400/15 dark:text-blue-200">
-                          <CreditCard className="h-4 w-4" />
-                        </span>
-                        <span className="min-w-0 flex-1">
-                          <span className="block truncate text-sm font-medium">{method.name}</span>
-                          <span className="block truncate text-xs text-slate-500 dark:text-slate-400">{usageCount} 笔账单</span>
-                        </span>
-                        <Button type="button" variant="ghost" size="icon" className="h-8 w-8 text-slate-500" onClick={() => beginEditPaymentMethod(method)} aria-label={`编辑${method.name}`}>
-                          <Pencil className="h-4 w-4" />
-                        </Button>
-                        <Button type="button" variant="ghost" size="icon" className="h-8 w-8 text-slate-500" onClick={() => deletePaymentMethod(method)} aria-label={`${usageCount > 0 ? '停用' : '删除'}${method.name}`}>
-                          {usageCount > 0 ? <Archive className="h-4 w-4" /> : <Trash2 className="h-4 w-4" />}
-                        </Button>
-                      </div>
-                    )
-                  })}
-                </div>
-              </div>
-            ) : null}
-
-            {settingsPanel === 'invoice' ? (
-              <div className="space-y-3">
-                <MiniStat label="可用发票状态" value={`${activeInvoiceStatuses.length} 个`} />
-                <form onSubmit={saveInvoiceStatus} className="space-y-2 rounded-lg border border-slate-200/80 bg-white/70 p-3 dark:border-white/10 dark:bg-black/15">
-                  <Input value={invoiceStatusForm} onChange={(event) => setInvoiceStatusForm(event.target.value)} placeholder="发票状态名称" className="h-10" />
-                  <div className="flex gap-2">
-                    <Button type="submit" className="h-10 flex-1 bg-emerald-600 text-white hover:bg-emerald-700" disabled={saving || !invoiceStatusForm.trim()}>
-                      <Plus className="h-4 w-4" />
-                      {editingInvoiceStatusId ? '保存状态' : '新增状态'}
-                    </Button>
-                    {editingInvoiceStatusId ? (
-                      <Button type="button" variant="outline" className="h-10 bg-white/70 dark:border-white/10 dark:bg-white/[0.045]" onClick={cancelEditInvoiceStatus}>
-                        取消
-                      </Button>
-                    ) : null}
-                  </div>
-                </form>
-                <div className="grid gap-2">
-                  {activeInvoiceStatuses.map((status) => {
-                    const usageCount = getInvoiceStatusUsageCount(status.value)
-                    return (
-                      <div key={status.id} className="flex items-center gap-3 rounded-lg border border-slate-200/80 bg-white/70 px-3 py-2.5 dark:border-white/10 dark:bg-black/15">
-                        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-amber-50 text-amber-700 dark:bg-amber-400/15 dark:text-amber-200">
-                          <FileCheck2 className="h-4 w-4" />
-                        </span>
-                        <span className="min-w-0 flex-1">
-                          <span className="block truncate text-sm font-medium">{status.label}</span>
-                          <span className="block truncate text-xs text-slate-500 dark:text-slate-400">{usageCount} 笔账单</span>
-                        </span>
-                        <Button type="button" variant="ghost" size="icon" className="h-8 w-8 text-slate-500" onClick={() => beginEditInvoiceStatus(status)} aria-label={`编辑${status.label}`}>
-                          <Pencil className="h-4 w-4" />
-                        </Button>
-                        <Button type="button" variant="ghost" size="icon" className="h-8 w-8 text-slate-500" onClick={() => deleteInvoiceStatus(status)} aria-label={`${usageCount > 0 ? '停用' : '删除'}${status.label}`}>
-                          {usageCount > 0 ? <Archive className="h-4 w-4" /> : <Trash2 className="h-4 w-4" />}
-                        </Button>
-                      </div>
-                    )
-                  })}
-                </div>
-              </div>
-            ) : null}
-
-            {settingsPanel === 'archive' ? (
-              <div className="space-y-4">
-                <MiniStat label="归档数据" value={`${archivedItemCount} 项`} />
-
-                <section className="space-y-2">
-                  <h4 className="px-1 text-sm font-semibold text-slate-700 dark:text-slate-200">归档分类</h4>
-                  {archivedCategories.length ? (
-                    archivedCategories.map((category) => {
-                      const Icon = getCategoryIcon(category.icon)
-                      const usageCount = getCategoryUsageCount(category.id)
-                      return (
-                        <div key={category.id} className="flex items-center gap-3 rounded-lg border border-slate-200/80 bg-white/70 px-3 py-2.5 dark:border-white/10 dark:bg-black/15">
-                          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-white" style={{ backgroundColor: category.color }}>
-                            <Icon className="h-4 w-4" />
-                          </span>
-                          <span className="min-w-0 flex-1">
-                            <span className="block truncate text-sm font-medium">{category.name}</span>
-                            <span className="block truncate text-xs text-slate-500 dark:text-slate-400">{usageCount > 0 ? `已被 ${usageCount} 笔账单使用` : '未被使用，可删除'}</span>
-                          </span>
-                          <Button type="button" variant="ghost" size="icon" className="h-8 w-8 text-slate-500 disabled:opacity-35" onClick={() => deleteArchivedCategory(category)} disabled={usageCount > 0} aria-label={`删除归档分类${category.name}`}>
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      )
-                    })
-                  ) : (
-                    <EmptyState icon={Archive} title="没有归档分类" detail="停用分类后会显示在这里。" />
-                  )}
-                </section>
-
-                <section className="space-y-2">
-                  <h4 className="px-1 text-sm font-semibold text-slate-700 dark:text-slate-200">归档行程</h4>
-                  {archivedTrips.length ? (
-                    archivedTrips.map((trip) => {
-                      const usageCount = getTripUsageCount(trip.id)
-                      return (
-                        <div key={trip.id} className="flex items-center gap-3 rounded-lg border border-slate-200/80 bg-white/70 px-3 py-2.5 dark:border-white/10 dark:bg-black/15">
-                          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-emerald-50 text-emerald-700 dark:bg-emerald-400/15 dark:text-emerald-200">
-                            <MapPin className="h-4 w-4" />
-                          </span>
-                          <span className="min-w-0 flex-1">
-                            <span className="block truncate text-sm font-medium">{trip.name}</span>
-                            <span className="block truncate text-xs text-slate-500 dark:text-slate-400">{usageCount > 0 ? `已被 ${usageCount} 笔账单使用` : '未被使用，可删除'}</span>
-                          </span>
-                          <Button type="button" variant="ghost" size="icon" className="h-8 w-8 text-slate-500 disabled:opacity-35" onClick={() => deleteArchivedTrip(trip)} disabled={usageCount > 0} aria-label={`删除归档行程${trip.name}`}>
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      )
-                    })
-                  ) : (
-                    <EmptyState icon={Archive} title="没有归档行程" detail="归档行程后会显示在这里。" />
-                  )}
-                </section>
-              </div>
-            ) : null}
-
-          </div>
-          <div className="border-t border-slate-200/80 bg-white/92 px-4 pb-[max(env(safe-area-inset-bottom),1rem)] pt-3 dark:border-white/10 dark:bg-[#090d18]/95">
-            <Button type="button" variant="outline" className="h-11 w-full rounded-lg border-slate-200 bg-white text-base font-semibold text-slate-700 shadow-sm hover:bg-slate-50 dark:border-white/10 dark:bg-white/[0.06] dark:text-slate-100 dark:hover:bg-white/[0.1]" onClick={() => setSettingsPanel(null)}>
-              返回
-            </Button>
-          </div>
-        </div>
-      </div>
-    )
-  }
-
-
-  function BatchConfirmDialog() {
-    if (!batchConfirmStatus) return null
-    const isReimbursed = batchConfirmStatus === 'reimbursed'
-    const statusLabel = isReimbursed ? '已报销' : '待报销'
-
-    return (
-      <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/35 px-3 pb-[max(env(safe-area-inset-bottom),0.75rem)] pt-[max(env(safe-area-inset-top),0.75rem)] backdrop-blur-sm dark:bg-black/65 sm:items-center sm:p-6" role="dialog" aria-modal="true" aria-label="确认批量修改">
-        <button type="button" className="absolute inset-0 cursor-default" aria-label="取消批量修改" onClick={() => setBatchConfirmStatus(null)} />
-        <Card className="relative z-10 w-full max-w-sm rounded-lg border-slate-200/80 bg-white p-4 shadow-[0_24px_80px_rgba(15,23,42,0.24)] dark:border-white/10 dark:bg-[#101624]">
-          <div className="flex items-start gap-3">
-            <span className={cn('mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-white', isReimbursed ? 'bg-emerald-600' : 'bg-amber-500')}>
-              <CheckCircle2 className="h-5 w-5" />
-            </span>
-            <div className="min-w-0 flex-1">
-              <h3 className="text-base font-semibold tracking-normal text-slate-950 dark:text-white">批量改为{statusLabel}</h3>
-              <p className="mt-1 text-sm leading-6 text-slate-500 dark:text-slate-400">
-                将选中的 {selectedExpenses.length} 笔账单更新为{statusLabel}。
-              </p>
-            </div>
-          </div>
-
-          <div className="mt-4 rounded-lg border border-slate-200/80 bg-slate-50 px-3 py-2.5 dark:border-white/10 dark:bg-black/20">
-            <div className="flex items-center justify-between gap-3">
-              <span className="text-xs font-medium text-slate-500 dark:text-slate-400">已选合计</span>
-              <span className="text-lg font-semibold tracking-normal text-slate-950 dark:text-white">{formatMoney(selectedExpenseTotal)}</span>
-            </div>
-          </div>
-
-          <div className="mt-4 grid grid-cols-2 gap-2">
-            <Button type="button" variant="outline" className="h-10 rounded-md border-slate-200 bg-white text-slate-700 hover:bg-slate-50 dark:border-white/10 dark:bg-white/[0.06] dark:text-slate-100 dark:hover:bg-white/[0.1]" onClick={() => setBatchConfirmStatus(null)} disabled={saving}>
-              取消
-            </Button>
-            <Button type="button" className={cn('h-10 rounded-md text-white disabled:opacity-70', isReimbursed ? 'bg-emerald-600 hover:bg-emerald-700 dark:bg-emerald-400 dark:text-slate-950 dark:hover:bg-emerald-300' : 'bg-amber-500 hover:bg-amber-600 dark:bg-amber-300 dark:text-slate-950 dark:hover:bg-amber-200')} onClick={confirmBatchUpdateReimbursementStatus} disabled={saving}>
-              {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-              确认修改
-            </Button>
-          </div>
-        </Card>
-      </div>
-    )
-  }
-
-
-
-  function SmartDialog() {
-    if (!smartOpen) return null
-    return (
-      <div className="fixed inset-0 z-50 flex h-dvh items-end justify-center bg-black/35 px-3 pb-[max(env(safe-area-inset-bottom),0.75rem)] pt-[max(env(safe-area-inset-top),0.75rem)] backdrop-blur-sm dark:bg-black/70 sm:items-center sm:p-6">
-        <Card className="max-h-[calc(100dvh-env(safe-area-inset-top)-env(safe-area-inset-bottom)-1rem)] w-full max-w-lg overflow-y-auto overscroll-contain rounded-t-lg border-slate-200/80 bg-white p-4 shadow-float custom-scrollbar dark:border-white/10 dark:bg-[#101624] sm:rounded-lg">
-          <div className="flex items-center justify-between">
-            <div>
-              <h2 className="text-xl font-semibold tracking-normal">{smartMode === 'voice' ? '语音记账' : '智能记账'}</h2>
-              <p className="mt-1 text-xs text-slate-400">
-                {smartMode === 'voice' || listening ? voiceStatus : '输入一句话，自动拆成账单字段'}
-              </p>
-            </div>
-            <Button type="button" variant="ghost" size="icon" className="text-slate-500 dark:text-slate-400" onClick={closeSmartDialog} aria-label="关闭">
-              <X className="h-4 w-4" />
-            </Button>
-          </div>
-          {smartMode === 'voice' ? (
-            <div className="mt-6">
-              <div className="flex min-h-[270px] flex-col items-center justify-center rounded-lg border border-slate-200/80 bg-slate-50 px-4 py-6 dark:border-white/10 dark:bg-black/20">
-                <div className="relative flex h-32 w-32 items-center justify-center">
-                  {listening ? (
-                    <>
-                      <span className="absolute h-32 w-32 rounded-full bg-emerald-400/20 animate-ping" />
-                      <span className="absolute h-24 w-24 rounded-full bg-emerald-400/20 animate-pulse" />
-                    </>
-                  ) : (
-                    <span className="absolute h-28 w-28 rounded-full bg-slate-500/10" />
-                  )}
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    className={cn(
-                      'relative h-20 w-20 rounded-full shadow-[0_0_34px_rgba(45,212,191,0.32)] transition hover:bg-slate-200 dark:hover:bg-slate-700',
-                      listening ? 'bg-emerald-500 text-slate-950' : 'bg-slate-200 text-slate-600 dark:bg-slate-700 dark:text-slate-200'
-                    )}
-                    onClick={listening ? completeVoiceAndAnalyze : startSpeech}
-                    disabled={analyzing}
-                    aria-label={listening ? '完成识别' : '开始识别'}
-                  >
-                    {analyzing ? <Loader2 className="h-9 w-9 animate-spin" /> : <Mic className="h-10 w-10" />}
-                  </Button>
-                </div>
-                <div className="mt-6 text-center">
-                  <p className="text-2xl font-semibold tracking-normal">{listening ? '正在识别' : analyzing ? '正在解析' : '语音待命'} {formatVoiceTime(recordingSeconds)}</p>
-                  <p className="mt-2 text-sm text-slate-400">说出金额、标题、分类或发票状态</p>
-                </div>
-                <div className="mt-5 w-full rounded-lg border border-slate-200/80 bg-white px-3 py-3 text-left dark:border-white/10 dark:bg-white/[0.05]">
-                  <p className="text-xs font-semibold text-slate-500">识别结果</p>
-                  <Textarea
-                    value={smartText}
-                    onChange={(event) => {
-                      voiceManualEditedRef.current = true
-                      setSmartText(event.target.value)
-                      setSmartDraft(null)
-                    }}
-                    onFocus={discardVoiceSession}
-                    placeholder="识别到的文字会显示在这里；识别失败时可以直接手动输入或修改。"
-                    rows={3}
-                    className="mt-2 min-h-[88px] resize-none border-slate-200 bg-white text-base leading-relaxed text-[#111815] dark:border-white/10 dark:bg-black/20 dark:text-slate-100"
-                  />
-                </div>
-              </div>
-              <div className="mt-3">
-                <Button
-                  type="button"
-                  className="h-11 w-full bg-blue-600 text-white hover:bg-blue-700 dark:bg-blue-400 dark:text-slate-950 dark:hover:bg-blue-300"
-                  onClick={completeVoiceAndAnalyze}
-                  disabled={analyzing || !smartText.trim()}
-                >
-                  {analyzing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-                  完成并解析
-                </Button>
-              </div>
-            </div>
-          ) : (
-            <>
-              <div className="relative mt-4">
-                <Textarea
-                  value={smartText}
-                  onChange={(event) => {
-                    setSmartText(event.target.value)
-                    setSmartDraft(null)
-                  }}
-                  onFocus={discardVoiceSession}
-                  placeholder="例如：今天晚上客户招待吃饭 168 元 已开票"
-                  rows={4}
-                  className="min-h-[132px] resize-none rounded-lg border-slate-200 bg-white pb-14 text-base leading-relaxed dark:border-white/10 dark:bg-black/20 sm:text-sm"
-                />
-                <div className="absolute bottom-3 right-3 flex items-center gap-2">
-                  {listening ? <span className="rounded-full bg-white/90 px-2 py-1 text-xs font-medium text-emerald-700 shadow-sm dark:bg-slate-900/90 dark:text-emerald-300">{formatVoiceTime(recordingSeconds)}</span> : null}
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="icon"
-                    className={cn(
-                      'h-10 w-10 rounded-md border-slate-200 bg-white/95 text-slate-600 shadow-sm hover:bg-slate-50 dark:border-white/10 dark:bg-slate-900/90 dark:text-slate-100 dark:hover:bg-white/10',
-                      listening && 'border-emerald-300 bg-emerald-50 text-emerald-700 ring-4 ring-emerald-500/10 dark:border-emerald-400/40 dark:bg-emerald-400/15 dark:text-emerald-200'
-                    )}
-                    onMouseDown={(event) => event.preventDefault()}
-                    onClick={listening ? stopInlineSpeech : startInlineSpeech}
-                    disabled={analyzing}
-                    aria-label={listening ? '停止语音输入' : '开始语音输入'}
-                    title={listening ? '停止语音输入' : '语音输入'}
-                  >
-                    <Mic className={cn('h-5 w-5', listening && 'animate-pulse')} />
-                  </Button>
-                </div>
-              </div>
-              <Button
-                type="button"
-                className="mt-3 h-10 w-full bg-blue-600 text-white hover:bg-blue-700 dark:bg-blue-400 dark:text-slate-950 dark:hover:bg-blue-300"
-                onClick={() => {
-                  discardVoiceSession()
-                  void analyzeSmartText()
-                }}
-                disabled={analyzing || !smartText.trim()}
-              >
-                {analyzing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-                解析
-              </Button>
-            </>
-          )}
-          {smartDraft ? (
-            <div className="mt-4 rounded-lg border border-slate-200/80 bg-slate-50 p-3 dark:border-white/10 dark:bg-black/20">
-              <div className="mb-3 flex items-center justify-between">
-                <p className="text-sm font-bold">快速修改</p>
-                <span className="text-xs text-slate-400">确认后直接添加</span>
-              </div>
-              <div className="grid grid-cols-2 gap-x-3 gap-y-2.5">
-                <Field label="金额">
-                  <Input
-                    type="number"
-                    inputMode="decimal"
-                    min="0"
-                    step="0.01"
-                    value={smartDraft.amount}
-                    onChange={(event) => patchSmartDraft({ amount: event.target.value })}
-                    className="h-10 text-base font-semibold"
-                  />
-                </Field>
-                <Field label="标题">
-                  <Input value={smartDraft.title} onChange={(event) => patchSmartDraft({ title: event.target.value })} className="h-10" />
-                </Field>
-                <Field label="分类">
-                  <select value={smartDraft.category_id} onChange={(event) => patchSmartDraft({ category_id: event.target.value })} className="field-input h-10">
-                    {activeCategories.map((category) => (
-                      <option key={category.id} value={category.id}>{category.name}</option>
-                    ))}
-                  </select>
-                </Field>
-                <Field label="行程">
-                  <select value={smartDraft.trip_id} onChange={(event) => patchSmartDraft({ trip_id: event.target.value })} className="field-input h-10">
-                    {trips.length ? (
-                      trips.map((trip) => (
-                        <option key={trip.id} value={trip.id}>{trip.name}</option>
-                      ))
-                    ) : (
-                      <option value="">暂无行程</option>
-                    )}
-                  </select>
-                </Field>
-                <Field label="日期">
-                  <Input type="date" value={smartDraft.expense_date} onChange={(event) => patchSmartDraft({ expense_date: event.target.value })} className="h-10" />
-                </Field>
-                <Field label="发票">
-                  <select value={smartDraft.invoice_status} onChange={(event) => patchSmartDraft({ invoice_status: event.target.value })} className="field-input h-10">
-                    {smartDraft.invoice_status && !activeInvoiceStatuses.some((status) => status.value === smartDraft.invoice_status) ? (
-                      <option value={smartDraft.invoice_status}>{invoiceLabelMap[smartDraft.invoice_status] || smartDraft.invoice_status}</option>
-                    ) : null}
-                    {activeInvoiceStatuses.map((status) => (
-                      <option key={status.id} value={status.value}>{status.label}</option>
-                    ))}
-                    {!activeInvoiceStatuses.length ? <option value="">暂无发票状态</option> : null}
-                  </select>
-                </Field>
-              </div>
-              <Button type="button" className="mt-3 h-10 w-full bg-emerald-700 text-white hover:bg-emerald-800 dark:bg-emerald-400 dark:text-slate-950 dark:hover:bg-emerald-300" onClick={addSmartDraft} disabled={saving || !smartDraft.amount || !smartDraft.title.trim()}>
-                {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
-                添加账单
-              </Button>
-            </div>
-          ) : null}
-        </Card>
-      </div>
-    )
-  }
-}
-
-function Field({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <label className="block min-w-0">
-      <span className="mb-1.5 block text-xs font-medium text-slate-400">{label}</span>
-      {children}
-    </label>
-  )
-}
-
-function MiniStat({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="min-w-0 rounded-lg border border-slate-200/80 bg-white/70 px-3 py-2.5 dark:border-white/10 dark:bg-black/15">
-      <p className="truncate text-xs text-slate-500 dark:text-slate-400">{label}</p>
-      <p className="mt-1 truncate text-sm font-semibold text-slate-950 dark:text-white">{value}</p>
-    </div>
-  )
-}
-
-function DesktopNav({ activeTab, setActiveTab, totals }: { activeTab: TabKey; setActiveTab: (tab: TabKey) => void; totals: { month: number; pendingReimbursement: number; reimbursed: number } }) {
-  return (
-    <aside className="hidden h-dvh border-r border-slate-200/80 bg-white/90 px-5 py-7 dark:border-white/10 dark:bg-white/[0.035] lg:block">
-      <div className="flex items-center gap-3">
-        <div className="flex h-11 w-11 items-center justify-center rounded-lg bg-emerald-700 text-white dark:bg-emerald-400 dark:text-slate-950">
-          <Wallet className="h-6 w-6" />
-        </div>
-        <div>
-          <h1 className="text-lg font-semibold tracking-normal text-emerald-700 dark:text-white">记账</h1>
-          <p className="text-xs text-slate-500 dark:text-slate-400">轻量报销记录</p>
-        </div>
-      </div>
-      <div className="mt-8 space-y-2">
-        {tabs.map((tab) => {
-          const Icon = tab.icon
-          return (
-            <Button
-              type="button"
-              variant="ghost"
-              key={tab.key}
-              className={cn(
-                'flex h-11 w-full items-center gap-3 rounded-lg px-3 text-sm font-semibold text-slate-500 transition hover:bg-emerald-50 hover:text-emerald-800 dark:text-slate-400 dark:hover:bg-white/10 dark:hover:text-white',
-                activeTab === tab.key && 'bg-emerald-50 text-emerald-800 shadow-card dark:bg-white/[0.12] dark:text-white'
-              )}
-              onClick={() => setActiveTab(tab.key)}
-            >
-              <Icon className="h-4 w-4" />
-              {tab.label}
-              <ChevronRight className="ml-auto h-4 w-4 opacity-40" />
-            </Button>
-          )
-        })}
-      </div>
-      <div className="mt-8 rounded-xl border border-slate-200/80 bg-white p-4 shadow-[0_2px_12px_rgba(0,0,0,0.06)] dark:border-white/10 dark:bg-black/20 dark:shadow-none">
-        <p className="text-xs text-slate-500 dark:text-slate-400">本月支出</p>
-        <p className="mt-2 text-2xl font-semibold tracking-normal text-black dark:text-white">{formatMoney(totals.month)}</p>
-        <div className="mt-4 grid grid-cols-2 gap-2 text-xs">
-          <div className="rounded-md bg-amber-50 p-2 text-amber-700 dark:bg-amber-300/10 dark:text-amber-100">
-            <p className="opacity-70">待报销</p>
-            <p className="mt-1 font-bold">{formatMoney(totals.pendingReimbursement)}</p>
-          </div>
-          <div className="rounded-md bg-emerald-50 p-2 text-emerald-700 dark:bg-emerald-400/10 dark:text-emerald-100">
-            <p className="opacity-70">已报销</p>
-            <p className="mt-1 font-bold">{formatMoney(totals.reimbursed)}</p>
-          </div>
-        </div>
-      </div>
-    </aside>
-  )
-}
-
-function BottomNav({ activeTab, setActiveTab }: { activeTab: TabKey; setActiveTab: (tab: TabKey) => void }) {
-  return (
-    <nav className="fixed inset-x-0 bottom-0 z-40 px-4 pb-[max(env(safe-area-inset-bottom),10px)] pt-2 lg:hidden">
-      <div className="mx-auto grid max-w-md grid-cols-4 gap-1 rounded-2xl border border-slate-200/80 bg-white/[0.96] p-1.5 shadow-[0_-10px_30px_rgba(15,23,42,0.10)] backdrop-blur-xl dark:border-white/10 dark:bg-[#090d18]/95">
-        {tabs.map((tab) => {
-          const Icon = tab.icon
-          return (
-            <Button
-              type="button"
-              variant="ghost"
-              key={tab.key}
-              className={cn(
-                'flex h-[3.25rem] flex-col items-center justify-center gap-0.5 rounded-md text-[0.72rem] font-medium leading-4 text-slate-500 transition hover:bg-slate-50 dark:text-slate-400 dark:hover:bg-white/[0.08]',
-                activeTab === tab.key && 'bg-emerald-50 text-emerald-700 shadow-[inset_0_1px_0_rgba(255,255,255,0.85)] dark:bg-white/[0.14] dark:text-emerald-300'
-              )}
-              onClick={() => setActiveTab(tab.key)}
-            >
-              <Icon className="h-5 w-5" />
-              {tab.label}
-            </Button>
-          )
-        })}
-      </div>
-    </nav>
-  )
-}
-
-function createReceiptZipFile(expense: Expense): ZipFile | null {
-  const decoded = decodeDataUrl(expense.receipt_url || '')
-  if (!decoded) return null
-  const extension = mimeToExtension(decoded.mime)
-  return {
-    name: `receipts/${safeFileName(`${expense.expense_date}-${expense.title}-${expense.id}`)}.${extension}`,
-    data: decoded.data,
-  }
-}
-
-function decodeDataUrl(value: string): { mime: string; data: Uint8Array } | null {
-  const match = value.match(/^data:([^;,]+)?(;base64)?,(.*)$/)
-  if (!match) return null
-  const mime = match[1] || 'application/octet-stream'
-  const body = match[3] || ''
-
-  if (match[2]) {
-    const binary = atob(body)
-    const bytes = new Uint8Array(binary.length)
-    for (let index = 0; index < binary.length; index += 1) {
-      bytes[index] = binary.charCodeAt(index)
-    }
-    return { mime, data: bytes }
-  }
-
-  try {
-    return { mime, data: new TextEncoder().encode(decodeURIComponent(body)) }
-  } catch {
-    return null
-  }
-}
-
-function mimeToExtension(mime: string) {
-  if (mime.includes('png')) return 'png'
-  if (mime.includes('jpeg') || mime.includes('jpg')) return 'jpg'
-  if (mime.includes('webp')) return 'webp'
-  if (mime.includes('gif')) return 'gif'
-  if (mime.includes('pdf')) return 'pdf'
-  return 'bin'
-}
-
-function safeFileName(value: string) {
-  return (
-    value
-      .replace(/[\\/:*?"<>|]+/g, '-')
-      .replace(/\s+/g, ' ')
-      .trim()
-      .slice(0, 88) || '账单'
-  )
-}
-
-function downloadBlob(blob: Blob, filename: string) {
-  const url = URL.createObjectURL(blob)
-  const anchor = document.createElement('a')
-  anchor.href = url
-  anchor.download = filename
-  document.body.appendChild(anchor)
-  anchor.click()
-  anchor.remove()
-  window.setTimeout(() => URL.revokeObjectURL(url), 0)
-}
-
-const crcTable = createCrcTable()
-const zipEncoder = new TextEncoder()
-
-function createCrcTable() {
-  const table = new Uint32Array(256)
-  for (let index = 0; index < 256; index += 1) {
-    let value = index
-    for (let bit = 0; bit < 8; bit += 1) {
-      value = value & 1 ? 0xedb88320 ^ (value >>> 1) : value >>> 1
-    }
-    table[index] = value >>> 0
-  }
-  return table
-}
-
-function crc32(data: Uint8Array) {
-  let crc = 0xffffffff
-  for (let index = 0; index < data.length; index += 1) {
-    crc = (crc >>> 8) ^ crcTable[(crc ^ data[index]) & 0xff]
-  }
-  return (crc ^ 0xffffffff) >>> 0
-}
-
-function createZipArchive(files: ZipFile[]) {
-  const now = new Date()
-  const dosTime = (now.getHours() << 11) | (now.getMinutes() << 5) | Math.floor(now.getSeconds() / 2)
-  const dosDate = ((now.getFullYear() - 1980) << 9) | ((now.getMonth() + 1) << 5) | now.getDate()
-  const localParts: Uint8Array[] = []
-  const centralParts: Uint8Array[] = []
-  let offset = 0
-
-  for (const file of files) {
-    const name = zipEncoder.encode(file.name)
-    const checksum = crc32(file.data)
-    const local = new Uint8Array(30 + name.length)
-    const localView = new DataView(local.buffer)
-    localView.setUint32(0, 0x04034b50, true)
-    localView.setUint16(4, 20, true)
-    localView.setUint16(6, 0x0800, true)
-    localView.setUint16(8, 0, true)
-    localView.setUint16(10, dosTime, true)
-    localView.setUint16(12, dosDate, true)
-    localView.setUint32(14, checksum, true)
-    localView.setUint32(18, file.data.length, true)
-    localView.setUint32(22, file.data.length, true)
-    localView.setUint16(26, name.length, true)
-    localView.setUint16(28, 0, true)
-    local.set(name, 30)
-    localParts.push(local, file.data)
-
-    const central = new Uint8Array(46 + name.length)
-    const centralView = new DataView(central.buffer)
-    centralView.setUint32(0, 0x02014b50, true)
-    centralView.setUint16(4, 20, true)
-    centralView.setUint16(6, 20, true)
-    centralView.setUint16(8, 0x0800, true)
-    centralView.setUint16(10, 0, true)
-    centralView.setUint16(12, dosTime, true)
-    centralView.setUint16(14, dosDate, true)
-    centralView.setUint32(16, checksum, true)
-    centralView.setUint32(20, file.data.length, true)
-    centralView.setUint32(24, file.data.length, true)
-    centralView.setUint16(28, name.length, true)
-    centralView.setUint16(30, 0, true)
-    centralView.setUint16(32, 0, true)
-    centralView.setUint16(34, 0, true)
-    centralView.setUint16(36, 0, true)
-    centralView.setUint32(38, 0, true)
-    centralView.setUint32(42, offset, true)
-    central.set(name, 46)
-    centralParts.push(central)
-
-    offset += local.length + file.data.length
-  }
-
-  const centralOffset = offset
-  const centralSize = centralParts.reduce((sum, part) => sum + part.length, 0)
-  const end = new Uint8Array(22)
-  const endView = new DataView(end.buffer)
-  endView.setUint32(0, 0x06054b50, true)
-  endView.setUint16(4, 0, true)
-  endView.setUint16(6, 0, true)
-  endView.setUint16(8, files.length, true)
-  endView.setUint16(10, files.length, true)
-  endView.setUint32(12, centralSize, true)
-  endView.setUint32(16, centralOffset, true)
-  endView.setUint16(20, 0, true)
-
-  return new Blob([...localParts, ...centralParts, end], { type: 'application/zip' })
 }

@@ -120,3 +120,5 @@ export type StatsData = {
   tripTotals: Array<{ trip: Trip; amount: number }>
   maxWeek: number
 }
+
+export type SettingsPanel = 'profile' | 'categories' | 'trips' | 'archive' | 'payment' | 'invoice' | 'users' | null
