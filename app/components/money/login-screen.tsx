@@ -4,7 +4,7 @@ import { Input } from '@/components/ui/input'
 import { Loader2, Eye, EyeOff } from 'lucide-react'
 import { fetchJson, friendlyErrorMessage } from '@/app/components/money/money-utils'
 
-export function LoginScreen({ onLogin }: { onLogin: () => void }) {
+export function LoginScreen({ onLogin }: { onLogin: () => void | Promise<void> }) {
   const [isLogin, setIsLogin] = useState(true)
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
@@ -23,7 +23,7 @@ export function LoginScreen({ onLogin }: { onLogin: () => void }) {
         method: 'POST',
         body: JSON.stringify({ username, password }),
       })
-      onLogin()
+      await onLogin()
     } catch (e: any) {
       setError(friendlyErrorMessage(e, '登录失败，请稍后重试'))
     } finally {
@@ -83,12 +83,17 @@ export function LoginScreen({ onLogin }: { onLogin: () => void }) {
             {error}
           </p>
 
-          <Button type="submit" className="h-11 w-full bg-emerald-600 hover:bg-emerald-700 dark:bg-emerald-500 dark:hover:bg-emerald-600" disabled={loading || !username || !password}>
+          <Button
+            type="submit"
+            className="h-11 w-full bg-emerald-600 hover:bg-emerald-700 dark:bg-emerald-500 dark:hover:bg-emerald-600"
+            disabled={loading || !username || !password}
+            aria-busy={loading}
+          >
             <span className="relative inline-flex items-center justify-center">
               <span className="absolute right-full mr-2 flex h-4 w-4 items-center justify-center">
                 {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
               </span>
-              {isLogin ? '登录' : '注册'}
+              {loading ? '正在进入...' : isLogin ? '登录' : '注册'}
             </span>
           </Button>
 
@@ -96,6 +101,7 @@ export function LoginScreen({ onLogin }: { onLogin: () => void }) {
             <button
               type="button"
               className="text-sm font-medium text-emerald-600 hover:underline dark:text-emerald-400"
+              disabled={loading}
               onClick={() => {
                 setIsLogin(!isLogin)
                 setError('')

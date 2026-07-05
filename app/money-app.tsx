@@ -1372,7 +1372,7 @@ export function MoneyApp() {
   }
 
   if (!user) {
-    return <LoginScreen onLogin={() => { setActiveTab('record'); loadData() }} />
+    return <LoginScreen onLogin={async () => { setActiveTab('record'); await loadData() }} />
   }
 
   return (
