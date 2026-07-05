@@ -4,6 +4,7 @@ type QueryValues = any[] | undefined
 
 let pool: Pool | null = null
 let initPromise: Promise<void> | null = null
+const initializationLockKey = 872604133
 
 const defaultCategories = [
   { name: '餐饮', icon: 'utensils', color: '#fb7a2a', sort_order: 0 },
@@ -34,19 +35,59 @@ function getPool() {
   const user = process.env.DB_USER
   const password = process.env.DB_PASSWORD
   const database = process.env.DB_NAME
+  const max = process.env.DB_POOL_MAX ? Number(process.env.DB_POOL_MAX) : 5
   if (!host || !user || !database) {
     throw new Error('DB config missing')
   }
-  pool = new Pool({ host, port, user, password, database, max: 10 })
+  pool = new Pool({
+    host,
+    port,
+    user,
+    password,
+    database,
+    max: Number.isFinite(max) && max > 0 ? max : 5,
+    connectionTimeoutMillis: 5000,
+    idleTimeoutMillis: 30000,
+    keepAlive: true,
+    keepAliveInitialDelayMillis: 10000,
+  })
   return pool
+}
+
+async function withInitializationLock<T>(fn: (conn: PoolClient) => Promise<T>) {
+  const p = getPool()
+  const conn = await p.connect()
+  let locked = false
+  try {
+    await conn.query('SELECT pg_advisory_lock($1)', [initializationLockKey])
+    locked = true
+    return await fn(conn)
+  } finally {
+    if (locked) {
+      try {
+        await conn.query('SELECT pg_advisory_unlock($1)', [initializationLockKey])
+      } catch (e) {
+        console.error('Failed to release DB initialization lock:', e)
+      }
+    }
+    conn.release()
+  }
+}
+
+async function addUniqueConstraintIfMissing(conn: PoolClient, table: string, constraintName: string, columns: string) {
+  const existing = await conn.query(
+    'SELECT 1 FROM pg_constraint WHERE conrelid = $1::regclass AND conname = $2',
+    [table, constraintName]
+  )
+  if (existing.rowCount === 0) {
+    await conn.query(`ALTER TABLE ${table} ADD CONSTRAINT ${constraintName} UNIQUE (${columns})`)
+  }
 }
 
 async function ensureInitialized() {
   if (initPromise) return initPromise
 
-  initPromise = (async () => {
-    const p = getPool()
-
+  initPromise = withInitializationLock(async (p) => {
     await p.query(
       'CREATE TABLE IF NOT EXISTS my_money_users (\n' +
         '  id BIGSERIAL PRIMARY KEY,\n' +
@@ -138,12 +179,9 @@ async function ensureInitialized() {
 
     // Drop old unique constraint on category name, and create a new compound one with user_id
     await p.query('ALTER TABLE my_money_categories DROP CONSTRAINT IF EXISTS my_money_categories_name_key')
-    await p.query('ALTER TABLE my_money_categories DROP CONSTRAINT IF EXISTS unique_category_name_per_user')
-    await p.query('ALTER TABLE my_money_categories ADD CONSTRAINT unique_category_name_per_user UNIQUE (user_id, name)')
-    await p.query('ALTER TABLE my_money_payment_methods DROP CONSTRAINT IF EXISTS unique_payment_method_per_user')
-    await p.query('ALTER TABLE my_money_payment_methods ADD CONSTRAINT unique_payment_method_per_user UNIQUE (user_id, name)')
-    await p.query('ALTER TABLE my_money_invoice_statuses DROP CONSTRAINT IF EXISTS unique_invoice_status_per_user')
-    await p.query('ALTER TABLE my_money_invoice_statuses ADD CONSTRAINT unique_invoice_status_per_user UNIQUE (user_id, value)')
+    await addUniqueConstraintIfMissing(p, 'my_money_categories', 'unique_category_name_per_user', 'user_id, name')
+    await addUniqueConstraintIfMissing(p, 'my_money_payment_methods', 'unique_payment_method_per_user', 'user_id, name')
+    await addUniqueConstraintIfMissing(p, 'my_money_invoice_statuses', 'unique_invoice_status_per_user', 'user_id, value')
 
     await p.query('CREATE INDEX IF NOT EXISTS idx_my_money_expenses_date ON my_money_expenses(expense_date DESC)')
     await p.query('CREATE INDEX IF NOT EXISTS idx_my_money_expenses_trip ON my_money_expenses(trip_id)')
@@ -221,7 +259,7 @@ async function ensureInitialized() {
         [table]
       )
     }
-  })().catch((e) => {
+  }).catch((e) => {
     initPromise = null
     throw e
   })

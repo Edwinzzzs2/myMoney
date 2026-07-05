@@ -13,6 +13,7 @@ export async function GET() {
     const data = await getBootstrapData(user.userId)
     return NextResponse.json({ authenticated: true, user, ...data, summary: buildSummary(data.expenses) })
   } catch (e: any) {
+    console.error('Bootstrap error:', e)
     return NextResponse.json({ message: friendlyErrorMessage(e, '初始化数据失败') }, { status: 500 })
   }
 }

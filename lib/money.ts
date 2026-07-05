@@ -1,4 +1,4 @@
-import { query } from '@/lib/db'
+import { transaction } from '@/lib/db'
 
 export type ExpensePayload = {
   trip_id?: number | string | null
@@ -75,16 +75,23 @@ export function normalizeExpensePayload(data: ExpensePayload) {
 }
 
 export async function getBootstrapData(userId: string) {
-  const [categories, trips, archivedTrips, paymentMethods, invoiceStatuses, expenses] = await Promise.all([
-    query(`${categorySelect} WHERE user_id = $1 ORDER BY sort_order ASC, id ASC`, [userId]),
-    query(`${tripSelect} WHERE user_id = $1 AND status <> 'archived' ORDER BY created_at DESC, id DESC`, [userId]),
-    query(`${tripSelect} WHERE user_id = $1 AND status = 'archived' ORDER BY updated_at DESC, id DESC`, [userId]),
-    query(`${paymentMethodSelect} WHERE user_id = $1 ORDER BY sort_order ASC, id ASC`, [userId]),
-    query(`${invoiceStatusSelect} WHERE user_id = $1 ORDER BY sort_order ASC, id ASC`, [userId]),
-    query(`${expenseSelect} WHERE e.user_id = $1 ORDER BY e.expense_date DESC, e.created_at DESC, e.id DESC`, [userId]),
-  ])
+  return transaction(async (conn) => {
+    const categories = await conn.query(`${categorySelect} WHERE user_id = $1 ORDER BY sort_order ASC, id ASC`, [userId])
+    const trips = await conn.query(`${tripSelect} WHERE user_id = $1 AND status <> 'archived' ORDER BY created_at DESC, id DESC`, [userId])
+    const archivedTrips = await conn.query(`${tripSelect} WHERE user_id = $1 AND status = 'archived' ORDER BY updated_at DESC, id DESC`, [userId])
+    const paymentMethods = await conn.query(`${paymentMethodSelect} WHERE user_id = $1 ORDER BY sort_order ASC, id ASC`, [userId])
+    const invoiceStatuses = await conn.query(`${invoiceStatusSelect} WHERE user_id = $1 ORDER BY sort_order ASC, id ASC`, [userId])
+    const expenses = await conn.query(`${expenseSelect} WHERE e.user_id = $1 ORDER BY e.expense_date DESC, e.created_at DESC, e.id DESC`, [userId])
 
-  return { categories, trips, archivedTrips, paymentMethods, invoiceStatuses, expenses }
+    return {
+      categories: categories.rows,
+      trips: trips.rows,
+      archivedTrips: archivedTrips.rows,
+      paymentMethods: paymentMethods.rows,
+      invoiceStatuses: invoiceStatuses.rows,
+      expenses: expenses.rows,
+    }
+  })
 }
 
 export function buildSummary(expenses: any[]) {
