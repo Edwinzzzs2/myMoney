@@ -2,15 +2,16 @@ import { NextRequest, NextResponse } from 'next/server'
 import { execute, query } from '@/lib/db'
 import { categorySelect } from '@/lib/money'
 import { getAuthenticatedUser } from '@/lib/auth'
+import { friendlyErrorMessage } from '@/lib/errors'
 
 export async function PATCH(req: NextRequest, context: { params: Promise<{ id: string }> }) {
   try {
     const user = await getAuthenticatedUser()
-    if (!user) return NextResponse.json({ message: 'Unauthorized' }, { status: 401 })
+    if (!user) return NextResponse.json({ message: '请先登录后再操作。' }, { status: 401 })
     
     const params = await context.params
     const id = Number(params.id)
-    if (!Number.isInteger(id)) return NextResponse.json({ message: '无效分类 ID' }, { status: 400 })
+    if (!Number.isInteger(id)) return NextResponse.json({ message: '无效分类编号' }, { status: 400 })
     const data = await req.json()
     const name = String(data?.name || '').trim()
     if (!name) return NextResponse.json({ message: '分类名称不能为空' }, { status: 400 })
@@ -30,18 +31,18 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
     const rows = await query(`${categorySelect} WHERE id = $1 AND user_id = $2`, [id, user.userId])
     return NextResponse.json(rows[0])
   } catch (e: any) {
-    return NextResponse.json({ message: e.message || '更新分类失败' }, { status: 400 })
+    return NextResponse.json({ message: friendlyErrorMessage(e, '更新分类失败') }, { status: 400 })
   }
 }
 
 export async function DELETE(req: NextRequest, context: { params: Promise<{ id: string }> }) {
   try {
     const user = await getAuthenticatedUser()
-    if (!user) return NextResponse.json({ message: 'Unauthorized' }, { status: 401 })
+    if (!user) return NextResponse.json({ message: '请先登录后再操作。' }, { status: 401 })
 
     const params = await context.params
     const id = Number(params.id)
-    if (!Number.isInteger(id)) return NextResponse.json({ message: '无效分类 ID' }, { status: 400 })
+    if (!Number.isInteger(id)) return NextResponse.json({ message: '无效分类编号' }, { status: 400 })
     const hardDelete = req.nextUrl.searchParams.get('hard') === '1'
     if (hardDelete) {
       const usageRows = await query('SELECT COUNT(*)::int AS count FROM my_money_expenses WHERE category_id = $1 AND user_id = $2', [id, user.userId])
@@ -55,6 +56,6 @@ export async function DELETE(req: NextRequest, context: { params: Promise<{ id: 
     if (result.rowCount === 0) return NextResponse.json({ message: '分类不存在' }, { status: 404 })
     return NextResponse.json({ message: '分类已停用' })
   } catch (e: any) {
-    return NextResponse.json({ message: e.message || '停用分类失败' }, { status: 500 })
+    return NextResponse.json({ message: friendlyErrorMessage(e, '停用分类失败') }, { status: 500 })
   }
 }

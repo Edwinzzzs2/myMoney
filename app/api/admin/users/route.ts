@@ -6,7 +6,7 @@ export async function GET() {
   try {
     const user = await getAuthenticatedUser()
     if (!user || user.username !== 'admin') {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+      return NextResponse.json({ error: '没有权限执行此操作。' }, { status: 403 })
     }
 
     // Query all users and aggregate some stats (number of categories, trips, and expenses)
@@ -28,7 +28,7 @@ export async function GET() {
     return NextResponse.json(rows)
   } catch (error: any) {
     console.error('Fetch users error:', error)
-    return NextResponse.json({ error: 'Failed to fetch users.' }, { status: 500 })
+    return NextResponse.json({ error: '获取用户列表失败。' }, { status: 500 })
   }
 }
 
@@ -36,28 +36,28 @@ export async function DELETE(request: Request) {
   try {
     const user = await getAuthenticatedUser()
     if (!user || user.username !== 'admin') {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+      return NextResponse.json({ error: '没有权限执行此操作。' }, { status: 403 })
     }
 
     const { targetUserId } = await request.json()
     if (!targetUserId) {
-      return NextResponse.json({ error: 'User ID required' }, { status: 400 })
+      return NextResponse.json({ error: '请选择要操作的用户。' }, { status: 400 })
     }
 
     // Retrieve username to verify it's not admin
     const targetUser = await query('SELECT username FROM my_money_users WHERE id = $1', [targetUserId])
     if (targetUser.length === 0) {
-      return NextResponse.json({ error: 'User not found' }, { status: 404 })
+      return NextResponse.json({ error: '用户不存在。' }, { status: 404 })
     }
 
     if (targetUser[0].username === 'admin') {
-      return NextResponse.json({ error: 'Cannot delete admin user' }, { status: 400 })
+      return NextResponse.json({ error: '不能删除管理员账户。' }, { status: 400 })
     }
 
     await execute('DELETE FROM my_money_users WHERE id = $1', [targetUserId])
-    return NextResponse.json({ success: true, message: 'User deleted successfully' })
+    return NextResponse.json({ success: true, message: '用户已删除。' })
   } catch (error: any) {
     console.error('Delete user error:', error)
-    return NextResponse.json({ error: 'Failed to delete user.' }, { status: 500 })
+    return NextResponse.json({ error: '删除用户失败。' }, { status: 500 })
   }
 }

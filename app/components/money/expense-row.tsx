@@ -11,13 +11,27 @@ type ExpenseRowProps = {
   expense: Expense
   compact?: boolean
   showActions?: boolean
+  selectable?: boolean
+  selected?: boolean
   invoiceLabelMap?: Record<string, string>
+  onToggleSelected?: (expense: Expense) => void
   onEdit: (expense: Expense) => void
   onDelete: (expense: Expense) => void
   onQuickStatus: (expense: Expense, status: string) => void
 }
 
-export function ExpenseRow({ expense, compact = false, showActions = false, invoiceLabelMap, onEdit, onDelete, onQuickStatus }: ExpenseRowProps) {
+export function ExpenseRow({
+  expense,
+  compact = false,
+  showActions = false,
+  selectable = false,
+  selected = false,
+  invoiceLabelMap,
+  onToggleSelected,
+  onEdit,
+  onDelete,
+  onQuickStatus,
+}: ExpenseRowProps) {
   const Icon = getCategoryIcon(expense.category_icon)
   const isPending = expense.reimbursement_status === 'pending'
   const reimbursementLabel = reimbursementLabels[expense.reimbursement_status] || expense.reimbursement_status
@@ -26,9 +40,25 @@ export function ExpenseRow({ expense, compact = false, showActions = false, invo
 
   return (
     <article
+      role={selectable ? 'button' : undefined}
+      tabIndex={selectable ? 0 : undefined}
+      aria-pressed={selectable ? selected : undefined}
+      onClick={selectable ? () => onToggleSelected?.(expense) : undefined}
+      onKeyDown={
+        selectable
+          ? (event) => {
+              if (event.key !== 'Enter' && event.key !== ' ') return
+              event.preventDefault()
+              onToggleSelected?.(expense)
+            }
+          : undefined
+      }
       className={cn(
         'bg-white p-3 transition hover:bg-slate-50 dark:bg-transparent dark:hover:bg-white/[0.04] lg:p-4',
-        !compact && 'rounded-lg border border-slate-200/80 dark:border-white/10'
+        !compact && 'rounded-lg border border-slate-200/80 dark:border-white/10',
+        selectable && 'cursor-pointer focus:outline-none focus:ring-2 focus:ring-emerald-300/70 dark:focus:ring-emerald-300/35',
+        selectable && !selected && 'hover:bg-emerald-50/35 dark:hover:bg-emerald-400/8',
+        selected && 'bg-emerald-50/80 shadow-[inset_4px_0_0_#10b981] hover:bg-emerald-50 dark:bg-emerald-400/10 dark:hover:bg-emerald-400/12'
       )}
     >
       <div className="flex items-center gap-3 lg:gap-4">
@@ -73,7 +103,10 @@ export function ExpenseRow({ expense, compact = false, showActions = false, invo
                       ? 'bg-amber-50 text-amber-700 hover:bg-emerald-50 hover:text-emerald-800 dark:bg-amber-300/10 dark:text-amber-200 dark:hover:bg-emerald-300/10 dark:hover:text-emerald-200'
                       : 'bg-emerald-50 text-emerald-700 hover:bg-amber-50 hover:text-amber-800 dark:bg-emerald-300/10 dark:text-emerald-200 dark:hover:bg-amber-300/10 dark:hover:text-amber-200'
                   )}
-                  onClick={() => onQuickStatus(expense, nextReimbursementStatus)}
+                  onClick={(event) => {
+                    event.stopPropagation()
+                    onQuickStatus(expense, nextReimbursementStatus)
+                  }}
                   aria-label={isPending ? `将${expense.title}标记为已报销` : `将${expense.title}改为待报销`}
                   title={isPending ? '标记为已报销' : '改为待报销'}
                 >
@@ -87,7 +120,17 @@ export function ExpenseRow({ expense, compact = false, showActions = false, invo
               <Badge variant="secondary" className="border-0 bg-slate-100 font-normal text-slate-600 dark:bg-white/10 dark:text-slate-300">
                 {expense.payment_method}
               </Badge>
-              <Button type="button" variant="ghost" size="icon" className="ml-auto text-slate-400" onClick={() => onEdit(expense)} aria-label="编辑">
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="ml-auto text-slate-400"
+                onClick={(event) => {
+                  event.stopPropagation()
+                  onEdit(expense)
+                }}
+                aria-label="编辑"
+              >
                 <Pencil className="h-4 w-4" />
               </Button>
               <Button
@@ -95,7 +138,10 @@ export function ExpenseRow({ expense, compact = false, showActions = false, invo
                 variant="ghost"
                 size="icon"
                 className="text-slate-400 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-400/10 dark:hover:text-red-200"
-                onClick={() => onDelete(expense)}
+                onClick={(event) => {
+                  event.stopPropagation()
+                  onDelete(expense)
+                }}
                 aria-label="删除"
               >
                 <Trash2 className="h-4 w-4" />

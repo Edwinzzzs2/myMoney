@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Loader2, Eye, EyeOff } from 'lucide-react'
-import { fetchJson } from '@/app/components/money/money-utils'
+import { fetchJson, friendlyErrorMessage } from '@/app/components/money/money-utils'
 
 export function LoginScreen({ onLogin }: { onLogin: () => void }) {
   const [isLogin, setIsLogin] = useState(true)
@@ -25,7 +25,7 @@ export function LoginScreen({ onLogin }: { onLogin: () => void }) {
       })
       onLogin()
     } catch (e: any) {
-      setError(e.message || '登录失败')
+      setError(friendlyErrorMessage(e, '登录失败，请稍后重试'))
     } finally {
       setLoading(false)
     }
@@ -52,7 +52,7 @@ export function LoginScreen({ onLogin }: { onLogin: () => void }) {
               onChange={(e) => setUsername(e.target.value)}
               placeholder="请输入用户名"
               required
-              minLength={3}
+              minLength={2}
               className="h-11 bg-slate-50/50"
             />
           </div>
@@ -63,9 +63,9 @@ export function LoginScreen({ onLogin }: { onLogin: () => void }) {
                 type={showPassword ? 'text' : 'password'}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                placeholder={isLogin ? '请输入密码' : '设置密码 (至少 6 位)'}
+                placeholder={isLogin ? '请输入密码' : '设置密码 (至少 2 位)'}
                 required
-                minLength={6}
+                minLength={2}
                 className="h-11 bg-slate-50/50 pr-10"
               />
               <button

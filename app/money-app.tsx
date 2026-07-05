@@ -35,6 +35,7 @@ import {
   formToPayload,
   formatMoney,
   formatVoiceTime,
+  friendlyErrorMessage,
   getCategoryIcon,
   iconMap,
   invoiceLabels as defaultInvoiceLabels,
@@ -75,6 +76,7 @@ import {
 import { cn } from '@/lib/utils'
 
 type HistoryFilter = 'all' | 'invoice' | 'reimbursement' | 'reimbursed'
+type BatchReimbursementStatus = 'pending' | 'reimbursed'
 type SettingsPanel = 'profile' | 'categories' | 'trips' | 'archive' | 'payment' | 'invoice' | 'users' | null
 type ZipFile = { name: string; data: Uint8Array }
 type CategoryIconValue = keyof typeof iconMap
@@ -104,6 +106,9 @@ export function MoneyApp() {
   const [form, setForm] = useState<ExpenseFormState>(makeBlankForm())
   const [search, setSearch] = useState('')
   const [historyFilter, setHistoryFilter] = useState<HistoryFilter>('all')
+  const [batchSelecting, setBatchSelecting] = useState(false)
+  const [selectedExpenseIds, setSelectedExpenseIds] = useState<string[]>([])
+  const [batchConfirmStatus, setBatchConfirmStatus] = useState<BatchReimbursementStatus | null>(null)
   const [settingsPanel, setSettingsPanel] = useState<SettingsPanel>(null)
   const [exportTripId, setExportTripId] = useState('')
   const [user, setUser] = useState<{ id: string; username: string } | null>(null)
@@ -231,6 +236,11 @@ export function MoneyApp() {
     return Array.from(groups.entries())
   }, [filteredExpenses])
 
+  const selectedExpenseIdSet = useMemo(() => new Set(selectedExpenseIds), [selectedExpenseIds])
+  const selectedExpenses = useMemo(() => expenses.filter((expense) => selectedExpenseIdSet.has(expense.id)), [expenses, selectedExpenseIdSet])
+  const selectedExpenseTotal = useMemo(() => selectedExpenses.reduce((sum, expense) => sum + Number(expense.amount || 0), 0), [selectedExpenses])
+  const allFilteredExpensesSelected = filteredExpenses.length > 0 && filteredExpenses.every((expense) => selectedExpenseIdSet.has(expense.id))
+
   const stats = useMemo(() => {
     const monthKey = todayISO().slice(0, 7)
     const monthExpenses = expenses.filter((item) => item.expense_date?.startsWith(monthKey))
@@ -267,6 +277,11 @@ export function MoneyApp() {
   useEffect(() => {
     void loadData()
   }, [])
+
+  useEffect(() => {
+    const existingIds = new Set(expenses.map((expense) => expense.id))
+    setSelectedExpenseIds((current) => current.filter((id) => existingIds.has(id)))
+  }, [expenses])
 
   useEffect(() => {
     return () => {
@@ -319,7 +334,7 @@ export function MoneyApp() {
       if (e.message?.includes('401')) {
         setUser(null)
       } else {
-        setError(e.message || '加载失败')
+        setError(friendlyErrorMessage(e, '加载失败'))
       }
       setAuthLoading(false)
     } finally {
@@ -341,8 +356,8 @@ export function MoneyApp() {
   async function handlePasswordChange(e: React.FormEvent) {
     e.preventDefault()
     if (!oldPassword || !newPassword) return
-    if (newPassword.length < 6) {
-      setPwdError('新密码长度不能少于 6 位')
+    if (newPassword.length < 2) {
+      setPwdError('新密码长度不能少于 2 位')
       return
     }
     if (newPassword !== confirmPassword) {
@@ -367,7 +382,7 @@ export function MoneyApp() {
       setNewPassword('')
       setConfirmPassword('')
     } catch (err: any) {
-      setPwdError(err.message || '系统错误，请重试')
+      setPwdError(friendlyErrorMessage(err, '系统错误，请重试'))
     } finally {
       setPwdLoading(false)
     }
@@ -388,7 +403,7 @@ export function MoneyApp() {
   }
 
   async function handleAdminResetPassword() {
-    if (!adminResetUserId || adminNewPassword.length < 6) return
+    if (!adminResetUserId || adminNewPassword.length < 2) return
     setAdminResetLoading(true)
     setAdminResetError('')
     setAdminResetSuccess('')
@@ -407,7 +422,7 @@ export function MoneyApp() {
       fetchAdminUsers()
       setTimeout(() => setAdminResetUserId(null), 1500)
     } catch (err: any) {
-      setAdminResetError(err.message || '重置失败')
+      setAdminResetError(friendlyErrorMessage(err, '重置失败'))
     } finally {
       setAdminResetLoading(false)
     }
@@ -427,7 +442,7 @@ export function MoneyApp() {
       if (!res.ok) throw new Error(data.error || '删除用户失败')
       fetchAdminUsers()
     } catch (err: any) {
-      alert(err.message || '删除失败')
+      alert(friendlyErrorMessage(err, '删除失败'))
     }
   }
 
@@ -519,7 +534,7 @@ export function MoneyApp() {
       setSmartText('')
       setSmartOpen(false)
     } catch (e: any) {
-      setError(e.message || '保存失败')
+      setError(friendlyErrorMessage(e, '保存失败'))
     } finally {
       setSaving(false)
     }
@@ -552,7 +567,7 @@ export function MoneyApp() {
       await fetchJson(`/api/expenses/${expense.id}`, { method: 'DELETE' })
       setExpenses((current) => current.filter((item) => item.id !== expense.id))
     } catch (e: any) {
-      setError(e.message || '删除失败')
+      setError(friendlyErrorMessage(e, '删除失败'))
     }
   }
 
@@ -565,7 +580,65 @@ export function MoneyApp() {
       })
       await loadData()
     } catch (e: any) {
-      setError(e.message || '更新状态失败')
+      setError(friendlyErrorMessage(e, '更新状态失败'))
+    }
+  }
+
+  function toggleExpenseSelection(expense: Expense) {
+    setSelectedExpenseIds((current) =>
+      current.includes(expense.id) ? current.filter((id) => id !== expense.id) : [...current, expense.id]
+    )
+  }
+
+  function toggleFilteredExpenseSelection() {
+    const filteredIds = filteredExpenses.map((expense) => expense.id)
+    if (!filteredIds.length) return
+    setSelectedExpenseIds((current) => {
+      const next = new Set(current)
+      if (filteredIds.every((id) => next.has(id))) {
+        filteredIds.forEach((id) => next.delete(id))
+      } else {
+        filteredIds.forEach((id) => next.add(id))
+      }
+      return Array.from(next)
+    })
+  }
+
+  function clearSelectedExpenses() {
+    setSelectedExpenseIds([])
+  }
+
+  function exitBatchSelection() {
+    setBatchSelecting(false)
+    setBatchConfirmStatus(null)
+    clearSelectedExpenses()
+  }
+
+  function requestBatchUpdateReimbursementStatus(status: BatchReimbursementStatus) {
+    if (!selectedExpenseIds.length) {
+      setError('请先选择账单')
+      return
+    }
+    setBatchConfirmStatus(status)
+  }
+
+  async function confirmBatchUpdateReimbursementStatus() {
+    if (!batchConfirmStatus || !selectedExpenseIds.length) return
+    setSaving(true)
+    setError('')
+    try {
+      await fetchJson<{ updatedCount: number }>('/api/expenses/batch', {
+        method: 'PATCH',
+        body: JSON.stringify({ ids: selectedExpenseIds, reimbursement_status: batchConfirmStatus }),
+      })
+      setBatchConfirmStatus(null)
+      clearSelectedExpenses()
+      setBatchSelecting(false)
+      await loadData()
+    } catch (e: any) {
+      setError(friendlyErrorMessage(e, '批量更新失败'))
+    } finally {
+      setSaving(false)
     }
   }
 
@@ -583,7 +656,7 @@ export function MoneyApp() {
       setCategoryForm({ name: '', icon: 'more', color: '#94a3b8' })
       await loadData()
     } catch (e: any) {
-      setError(e.message || '保存分类失败')
+      setError(friendlyErrorMessage(e, '保存分类失败'))
     } finally {
       setSaving(false)
     }
@@ -597,7 +670,7 @@ export function MoneyApp() {
       await fetchJson(`/api/categories/${category.id}`, { method: 'DELETE' })
       await loadData()
     } catch (e: any) {
-      setError(e.message || '停用分类失败')
+      setError(friendlyErrorMessage(e, '停用分类失败'))
     } finally {
       setSaving(false)
     }
@@ -618,7 +691,7 @@ export function MoneyApp() {
       setEditingTripId(null)
       await loadData()
     } catch (e: any) {
-      setError(e.message || '保存行程失败')
+      setError(friendlyErrorMessage(e, '保存行程失败'))
     } finally {
       setSaving(false)
     }
@@ -648,7 +721,7 @@ export function MoneyApp() {
       await fetchJson(`/api/trips/${trip.id}`, { method: 'DELETE' })
       await loadData()
     } catch (e: any) {
-      setError(e.message || '归档行程失败')
+      setError(friendlyErrorMessage(e, '归档行程失败'))
     } finally {
       setSaving(false)
     }
@@ -664,7 +737,7 @@ export function MoneyApp() {
       await fetchJson(`/api/categories/${category.id}?hard=1`, { method: 'DELETE' })
       await loadData()
     } catch (e: any) {
-      setError(e.message || '删除归档分类失败')
+      setError(friendlyErrorMessage(e, '删除归档分类失败'))
     } finally {
       setSaving(false)
     }
@@ -680,7 +753,7 @@ export function MoneyApp() {
       await fetchJson(`/api/trips/${trip.id}?hard=1`, { method: 'DELETE' })
       await loadData()
     } catch (e: any) {
-      setError(e.message || '删除归档行程失败')
+      setError(friendlyErrorMessage(e, '删除归档行程失败'))
     } finally {
       setSaving(false)
     }
@@ -706,7 +779,7 @@ export function MoneyApp() {
       setEditingPaymentMethodId(null)
       await loadData()
     } catch (e: any) {
-      setError(e.message || '保存支付方式失败')
+      setError(friendlyErrorMessage(e, '保存支付方式失败'))
     } finally {
       setSaving(false)
     }
@@ -732,7 +805,7 @@ export function MoneyApp() {
       await fetchJson(`/api/payment-methods/${method.id}${usageCount === 0 ? '?hard=1' : ''}`, { method: 'DELETE' })
       await loadData()
     } catch (e: any) {
-      setError(e.message || `${actionText}支付方式失败`)
+      setError(friendlyErrorMessage(e, `${actionText}支付方式失败`))
     } finally {
       setSaving(false)
     }
@@ -758,7 +831,7 @@ export function MoneyApp() {
       setEditingInvoiceStatusId(null)
       await loadData()
     } catch (e: any) {
-      setError(e.message || '保存发票状态失败')
+      setError(friendlyErrorMessage(e, '保存发票状态失败'))
     } finally {
       setSaving(false)
     }
@@ -784,7 +857,7 @@ export function MoneyApp() {
       await fetchJson(`/api/invoice-statuses/${status.id}${usageCount === 0 ? '?hard=1' : ''}`, { method: 'DELETE' })
       await loadData()
     } catch (e: any) {
-      setError(e.message || `${actionText}发票状态失败`)
+      setError(friendlyErrorMessage(e, `${actionText}发票状态失败`))
     } finally {
       setSaving(false)
     }
@@ -801,7 +874,7 @@ export function MoneyApp() {
       setSearch('')
       setHistoryFilter('all')
     } catch (e: any) {
-      setError(e.message || '清空历史失败')
+      setError(friendlyErrorMessage(e, '清空历史失败'))
     } finally {
       setSaving(false)
     }
@@ -945,11 +1018,11 @@ export function MoneyApp() {
         }),
       })
       setSmartDraft(normalizeAiDraft(parsed, text))
-      setVoiceStatus('AI 已解析完成，请确认账单明细')
+      setVoiceStatus('智能解析已完成，请确认账单明细')
     } catch (e: any) {
       setSmartDraft(parseSmartRecord(text))
-      setError(`${e.message || 'AI 解析不可用'}，已使用本地规则兜底`)
-      setVoiceStatus('AI 暂不可用，已用本地规则生成草稿')
+      setError(`${friendlyErrorMessage(e, '智能解析不可用')}，已使用本地规则兜底`)
+      setVoiceStatus('智能解析暂不可用，已用本地规则生成草稿')
     } finally {
       setAnalyzing(false)
     }
@@ -971,7 +1044,7 @@ export function MoneyApp() {
       setSmartOpen(false)
       setActiveTab('record')
     } catch (e: any) {
-      setError(e.message || '添加账单失败')
+      setError(friendlyErrorMessage(e, '添加账单失败'))
     } finally {
       setSaving(false)
     }
@@ -997,10 +1070,10 @@ export function MoneyApp() {
         setVoiceStatus('没有识别到新的内容，已保留原文本，可以手动修改后解析')
         return
       }
-      setVoiceStatus('正在让 AI 解析账单...')
+      setVoiceStatus('正在智能解析账单...')
       await analyzeSmartText(transcript)
     } catch (e: any) {
-      setError(e.message || '语音解析失败')
+      setError(friendlyErrorMessage(e, '语音解析失败'))
       setVoiceStatus('语音解析失败，可以再试一次或切到文字输入')
     } finally {
       setAnalyzing(false)
@@ -1261,6 +1334,7 @@ export function MoneyApp() {
 
       <BottomNav activeTab={activeTab} setActiveTab={setActiveTab} />
       {SettingsPanelView()}
+      {BatchConfirmDialog()}
       {SmartDialog()}
     </main>
   )
@@ -1270,42 +1344,78 @@ export function MoneyApp() {
       <div className="mx-auto max-w-[430px] space-y-3.5 lg:max-w-5xl">
         <div className="flex items-center justify-between gap-3">
           <h2 className="text-2xl font-semibold tracking-normal text-slate-950 dark:text-white">历史</h2>
-          <Button type="button" variant="ghost" size="icon" className="h-9 w-9 text-slate-700 dark:text-slate-100" onClick={loadData} aria-label="同步">
-            <RefreshCcw className={cn('h-4 w-4', loading && 'animate-spin')} />
-          </Button>
-        </div>
-
-        <div className="relative">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
-          <Input
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-            placeholder="搜索标题、分类、金额"
-            className="h-11 rounded-lg border-slate-200/80 bg-white/80 pl-9 text-sm shadow-sm dark:border-white/10 dark:bg-white/[0.045]"
-          />
-        </div>
-
-        <div className="flex gap-2 overflow-x-auto pb-1">
-          {[
-            { key: 'all' as const, label: '全部' },
-            { key: 'invoice' as const, label: '待开票' },
-            { key: 'reimbursement' as const, label: '待报销' },
-            { key: 'reimbursed' as const, label: '已报销' },
-          ].map((item) => (
+          <div className="flex shrink-0 items-center gap-2">
             <Button
               type="button"
-              variant="outline"
-              key={item.key}
+              variant={batchSelecting ? 'default' : 'outline'}
               className={cn(
-                'h-8 shrink-0 rounded-md border-slate-200/80 bg-white/70 px-3 text-sm dark:border-white/10 dark:bg-white/[0.045]',
-                historyFilter === item.key && 'border-emerald-300 bg-emerald-50 text-emerald-700 dark:border-emerald-400/30 dark:bg-emerald-400/15 dark:text-emerald-200'
+                'h-8 rounded-md px-2.5 text-sm font-semibold',
+                batchSelecting
+                  ? 'bg-emerald-600 text-white hover:bg-emerald-700 dark:bg-emerald-400 dark:text-slate-950 dark:hover:bg-emerald-300'
+                  : 'border-slate-200 bg-white/80 text-slate-700 shadow-sm dark:border-white/10 dark:bg-white/[0.06] dark:text-slate-100'
               )}
-              onClick={() => setHistoryFilter(item.key)}
+              onClick={batchSelecting ? exitBatchSelection : () => setBatchSelecting(true)}
             >
-              {item.label}
+              {batchSelecting ? '完成' : '批量'}
             </Button>
-          ))}
+            <Button type="button" variant="ghost" size="icon" className="h-8 w-8 text-slate-700 dark:text-slate-100" onClick={loadData} aria-label="同步">
+              <RefreshCcw className={cn('h-4 w-4', loading && 'animate-spin')} />
+            </Button>
+          </div>
         </div>
+
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="relative min-w-0 flex-[1_1_12rem]">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
+            <Input
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="搜索标题、分类、金额"
+              className="h-11 rounded-lg border-slate-200/80 bg-white/80 pl-9 text-sm shadow-sm dark:border-white/10 dark:bg-white/[0.045]"
+            />
+          </div>
+
+          <select
+            value={historyFilter}
+            onChange={(event) => setHistoryFilter(event.target.value as HistoryFilter)}
+            className="h-11 w-[7.25rem] shrink-0 rounded-lg border border-slate-200/80 bg-white/80 px-3 text-sm font-semibold text-slate-700 shadow-sm outline-none transition hover:bg-white dark:border-white/10 dark:bg-white/[0.045] dark:text-slate-100 dark:hover:bg-white/[0.08]"
+            aria-label="历史筛选"
+          >
+            <option value="all">全部</option>
+            <option value="invoice">待开票</option>
+            <option value="reimbursement">待报销</option>
+            <option value="reimbursed">已报销</option>
+          </select>
+
+        </div>
+
+        {batchSelecting ? (
+          <div className="flex w-full min-w-0 items-center gap-2 overflow-x-auto rounded-lg border border-emerald-200/80 bg-white/90 px-3 py-2 shadow-sm backdrop-blur dark:border-emerald-400/20 dark:bg-white/[0.055]">
+            <label className="flex h-8 shrink-0 cursor-pointer items-center gap-1.5 rounded-md border border-emerald-200 bg-emerald-50 px-2.5 text-xs font-medium text-emerald-700 transition hover:bg-emerald-100 dark:border-emerald-400/30 dark:bg-emerald-400/10 dark:text-emerald-100 dark:hover:bg-emerald-400/15">
+              <input
+                type="checkbox"
+                checked={allFilteredExpensesSelected}
+                onChange={toggleFilteredExpenseSelection}
+                disabled={!filteredExpenses.length}
+                className="h-3.5 w-3.5 accent-emerald-600"
+                aria-label="全选当前列表"
+              />
+              全选
+            </label>
+            <div className="min-w-[10rem] flex-1 whitespace-nowrap border-l border-slate-200 pl-3 text-right sm:text-left dark:border-white/10">
+              <span className="text-xs font-medium text-slate-500 dark:text-slate-400">已选 {selectedExpenses.length} 笔</span>
+              <span className="ml-2 text-base font-semibold text-slate-950 dark:text-white">{formatMoney(selectedExpenseTotal)}</span>
+            </div>
+            <div className="flex shrink-0 items-center gap-1.5">
+              <Button type="button" className="h-8 rounded-md bg-emerald-600 px-3 text-xs text-white hover:bg-emerald-700 disabled:opacity-50 dark:bg-emerald-400 dark:text-slate-950 dark:hover:bg-emerald-300" onClick={() => requestBatchUpdateReimbursementStatus('reimbursed')} disabled={saving || !selectedExpenses.length}>
+                已报销
+              </Button>
+              <Button type="button" className="h-8 rounded-md bg-amber-500 px-3 text-xs text-white hover:bg-amber-600 disabled:opacity-50 dark:bg-amber-300 dark:text-slate-950 dark:hover:bg-amber-200" onClick={() => requestBatchUpdateReimbursementStatus('pending')} disabled={saving || !selectedExpenses.length}>
+                未报销
+              </Button>
+            </div>
+          </div>
+        ) : null}
 
         <div className="space-y-3">
           {groupedExpenses.length ? (
@@ -1317,7 +1427,19 @@ export function MoneyApp() {
                 </div>
                 <div className="divide-y divide-slate-200/80 dark:divide-white/10">
                   {list.map((expense) => (
-                    <ExpenseItemRow key={expense.id} expense={expense} compact showActions invoiceLabelMap={invoiceLabelMap} onEdit={editExpense} onDelete={deleteExpense} onQuickStatus={quickStatus} />
+                    <ExpenseItemRow
+                      key={expense.id}
+                      expense={expense}
+                      compact
+                      showActions
+                      selectable={batchSelecting}
+                      selected={selectedExpenseIdSet.has(expense.id)}
+                      invoiceLabelMap={invoiceLabelMap}
+                      onToggleSelected={toggleExpenseSelection}
+                      onEdit={editExpense}
+                      onDelete={deleteExpense}
+                      onQuickStatus={quickStatus}
+                    />
                   ))}
                 </div>
               </Card>
@@ -1517,7 +1639,7 @@ export function MoneyApp() {
                         type={showNewPassword ? 'text' : 'password'}
                         value={newPassword}
                         onChange={(e) => setNewPassword(e.target.value)}
-                        placeholder="请输入新密码 (至少 6 位)"
+                        placeholder="请输入新密码 (至少 2 位)"
                         required
                         className="h-9 pr-10"
                       />
@@ -1624,9 +1746,9 @@ export function MoneyApp() {
                                   type={showAdminResetPassword ? 'text' : 'password'}
                                   value={adminNewPassword}
                                   onChange={(e) => setAdminNewPassword(e.target.value)}
-                                  placeholder="输入新密码 (至少6位)"
+                                  placeholder="输入新密码 (至少2位)"
                                   className="h-8 text-xs bg-white dark:bg-black/30 pr-8"
-                                  minLength={6}
+                                  minLength={2}
                                 />
                                 <button
                                   type="button"
@@ -1636,7 +1758,7 @@ export function MoneyApp() {
                                   {showAdminResetPassword ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
                                 </button>
                               </div>
-                              <Button type="button" size="sm" className="h-8 shrink-0 text-xs bg-emerald-600 text-white hover:bg-emerald-700" onClick={handleAdminResetPassword} disabled={adminResetLoading || adminNewPassword.length < 6}>
+                              <Button type="button" size="sm" className="h-8 shrink-0 text-xs bg-emerald-600 text-white hover:bg-emerald-700" onClick={handleAdminResetPassword} disabled={adminResetLoading || adminNewPassword.length < 2}>
                                 {adminResetLoading ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : null}
                                 确认
                               </Button>
@@ -1915,6 +2037,49 @@ export function MoneyApp() {
   }
 
 
+  function BatchConfirmDialog() {
+    if (!batchConfirmStatus) return null
+    const isReimbursed = batchConfirmStatus === 'reimbursed'
+    const statusLabel = isReimbursed ? '已报销' : '待报销'
+
+    return (
+      <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/35 px-3 pb-[max(env(safe-area-inset-bottom),0.75rem)] pt-[max(env(safe-area-inset-top),0.75rem)] backdrop-blur-sm dark:bg-black/65 sm:items-center sm:p-6" role="dialog" aria-modal="true" aria-label="确认批量修改">
+        <button type="button" className="absolute inset-0 cursor-default" aria-label="取消批量修改" onClick={() => setBatchConfirmStatus(null)} />
+        <Card className="relative z-10 w-full max-w-sm rounded-lg border-slate-200/80 bg-white p-4 shadow-[0_24px_80px_rgba(15,23,42,0.24)] dark:border-white/10 dark:bg-[#101624]">
+          <div className="flex items-start gap-3">
+            <span className={cn('mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-white', isReimbursed ? 'bg-emerald-600' : 'bg-amber-500')}>
+              <CheckCircle2 className="h-5 w-5" />
+            </span>
+            <div className="min-w-0 flex-1">
+              <h3 className="text-base font-semibold tracking-normal text-slate-950 dark:text-white">批量改为{statusLabel}</h3>
+              <p className="mt-1 text-sm leading-6 text-slate-500 dark:text-slate-400">
+                将选中的 {selectedExpenses.length} 笔账单更新为{statusLabel}。
+              </p>
+            </div>
+          </div>
+
+          <div className="mt-4 rounded-lg border border-slate-200/80 bg-slate-50 px-3 py-2.5 dark:border-white/10 dark:bg-black/20">
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-xs font-medium text-slate-500 dark:text-slate-400">已选合计</span>
+              <span className="text-lg font-semibold tracking-normal text-slate-950 dark:text-white">{formatMoney(selectedExpenseTotal)}</span>
+            </div>
+          </div>
+
+          <div className="mt-4 grid grid-cols-2 gap-2">
+            <Button type="button" variant="outline" className="h-10 rounded-md border-slate-200 bg-white text-slate-700 hover:bg-slate-50 dark:border-white/10 dark:bg-white/[0.06] dark:text-slate-100 dark:hover:bg-white/[0.1]" onClick={() => setBatchConfirmStatus(null)} disabled={saving}>
+              取消
+            </Button>
+            <Button type="button" className={cn('h-10 rounded-md text-white disabled:opacity-70', isReimbursed ? 'bg-emerald-600 hover:bg-emerald-700 dark:bg-emerald-400 dark:text-slate-950 dark:hover:bg-emerald-300' : 'bg-amber-500 hover:bg-amber-600 dark:bg-amber-300 dark:text-slate-950 dark:hover:bg-amber-200')} onClick={confirmBatchUpdateReimbursementStatus} disabled={saving}>
+              {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+              确认修改
+            </Button>
+          </div>
+        </Card>
+      </div>
+    )
+  }
+
+
 
   function SmartDialog() {
     if (!smartOpen) return null
@@ -1925,7 +2090,7 @@ export function MoneyApp() {
             <div>
               <h2 className="text-xl font-semibold tracking-normal">{smartMode === 'voice' ? '语音记账' : '智能记账'}</h2>
               <p className="mt-1 text-xs text-slate-400">
-                {smartMode === 'voice' || listening ? voiceStatus : '输入一句话，AI 自动拆成账单字段'}
+                {smartMode === 'voice' || listening ? voiceStatus : '输入一句话，自动拆成账单字段'}
               </p>
             </div>
             <Button type="button" variant="ghost" size="icon" className="text-slate-500 dark:text-slate-400" onClick={closeSmartDialog} aria-label="关闭">

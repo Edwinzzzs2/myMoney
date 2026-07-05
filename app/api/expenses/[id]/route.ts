@@ -2,16 +2,17 @@ import { NextRequest, NextResponse } from 'next/server'
 import { execute, query } from '@/lib/db'
 import { expenseSelect, normalizeExpensePayload } from '@/lib/money'
 import { getAuthenticatedUser } from '@/lib/auth'
+import { friendlyErrorMessage } from '@/lib/errors'
 
 export async function PATCH(req: NextRequest, context: { params: Promise<{ id: string }> }) {
   try {
     const user = await getAuthenticatedUser()
-    if (!user) return NextResponse.json({ message: 'Unauthorized' }, { status: 401 })
+    if (!user) return NextResponse.json({ message: '请先登录后再操作。' }, { status: 401 })
 
     const params = await context.params
     const id = Number(params.id)
     if (!Number.isInteger(id)) {
-      return NextResponse.json({ message: '无效账单 ID' }, { status: 400 })
+      return NextResponse.json({ message: '无效账单编号' }, { status: 400 })
     }
     const payload = normalizeExpensePayload(await req.json())
     const result = await execute(
@@ -40,19 +41,19 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
     const rows = await query(`${expenseSelect} WHERE e.id = $1 AND e.user_id = $2`, [id, user.userId])
     return NextResponse.json(rows[0])
   } catch (e: any) {
-    return NextResponse.json({ message: e.message || '更新账单失败' }, { status: 400 })
+    return NextResponse.json({ message: friendlyErrorMessage(e, '更新账单失败') }, { status: 400 })
   }
 }
 
 export async function DELETE(_req: NextRequest, context: { params: Promise<{ id: string }> }) {
   try {
     const user = await getAuthenticatedUser()
-    if (!user) return NextResponse.json({ message: 'Unauthorized' }, { status: 401 })
+    if (!user) return NextResponse.json({ message: '请先登录后再操作。' }, { status: 401 })
 
     const params = await context.params
     const id = Number(params.id)
     if (!Number.isInteger(id)) {
-      return NextResponse.json({ message: '无效账单 ID' }, { status: 400 })
+      return NextResponse.json({ message: '无效账单编号' }, { status: 400 })
     }
     const result = await execute('DELETE FROM my_money_expenses WHERE id = $1 AND user_id = $2', [id, user.userId])
     if (result.rowCount === 0) {
@@ -60,6 +61,6 @@ export async function DELETE(_req: NextRequest, context: { params: Promise<{ id:
     }
     return NextResponse.json({ message: '账单已删除' })
   } catch (e: any) {
-    return NextResponse.json({ message: e.message || '删除账单失败' }, { status: 500 })
+    return NextResponse.json({ message: friendlyErrorMessage(e, '删除账单失败') }, { status: 500 })
   }
 }

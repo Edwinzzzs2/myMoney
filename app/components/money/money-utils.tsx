@@ -14,6 +14,7 @@ import {
 } from 'lucide-react'
 
 import type { Expense, ExpenseFormState, TabKey } from './types'
+export { friendlyErrorMessage } from '@/lib/errors'
 
 export const iconMap = {
   utensils: Utensils,

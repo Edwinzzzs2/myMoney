@@ -7,9 +7,9 @@ export async function POST(request: Request) {
   try {
     const { username, password } = await request.json()
 
-    if (!username || !password || username.length < 3 || password.length < 6) {
+    if (!username || !password || username.length < 2 || password.length < 2) {
       return NextResponse.json(
-        { error: 'Username must be at least 3 chars and password at least 6 chars.' },
+        { error: '用户名和密码至少需要 2 位。' },
         { status: 400 }
       )
     }
@@ -17,7 +17,7 @@ export async function POST(request: Request) {
     // Check if user exists
     const existing = await query('SELECT id FROM my_money_users WHERE username = $1', [username])
     if (existing.length > 0) {
-      return NextResponse.json({ error: 'Username already taken.' }, { status: 400 })
+      return NextResponse.json({ error: '用户名已被占用。' }, { status: 400 })
     }
 
     // Hash password and insert
@@ -39,6 +39,6 @@ export async function POST(request: Request) {
     return NextResponse.json({ success: true, user: { id: userId, username } })
   } catch (error: any) {
     console.error('Registration error:', error)
-    return NextResponse.json({ error: 'Failed to register.' }, { status: 500 })
+    return NextResponse.json({ error: '注册失败，请稍后重试。' }, { status: 500 })
   }
 }

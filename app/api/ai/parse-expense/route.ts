@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { friendlyErrorMessage } from '@/lib/errors'
 
 type CategoryInput = {
   id: string
@@ -62,7 +63,7 @@ function extractJson(text: string) {
     if (start >= 0 && end > start) {
       return JSON.parse(cleaned.slice(start, end + 1))
     }
-    throw new Error('AI 返回不是有效 JSON')
+    throw new Error('智能解析返回内容格式不正确')
   }
 }
 
@@ -97,14 +98,14 @@ import { getAuthenticatedUser } from '@/lib/auth'
 
 export async function POST(req: NextRequest) {
   const user = await getAuthenticatedUser()
-  if (!user) return NextResponse.json({ message: 'Unauthorized' }, { status: 401 })
+  if (!user) return NextResponse.json({ message: '请先登录后再操作。' }, { status: 401 })
 
   const apiKey = process.env.AI_API_KEY?.trim()
   const baseUrl = process.env.AI_BASE_URL?.trim()
   const model = process.env.AI_MODEL?.trim() || 'gpt-4o-mini'
 
   if (!apiKey || !baseUrl) {
-    return NextResponse.json({ message: 'AI_API_KEY 或 AI_BASE_URL 未配置' }, { status: 500 })
+    return NextResponse.json({ message: '智能解析服务未配置，请检查服务密钥和地址。' }, { status: 500 })
   }
 
   const body = (await req.json()) as ParseRequest
@@ -180,18 +181,18 @@ export async function POST(req: NextRequest) {
 
     if (!response.ok) {
       const detail = await response.text().catch(() => '')
-      return NextResponse.json({ message: `AI 解析失败：${response.status}`, detail: detail.slice(0, 500) }, { status: 502 })
+      return NextResponse.json({ message: `智能解析失败：${response.status}`, detail: detail.slice(0, 500) }, { status: 502 })
     }
 
     const data = await response.json()
     const content = data?.choices?.[0]?.message?.content
     if (!content) {
-      return NextResponse.json({ message: 'AI 没有返回解析内容' }, { status: 502 })
+      return NextResponse.json({ message: '智能解析没有返回内容' }, { status: 502 })
     }
 
     const parsed = normalizeParsedExpense(extractJson(content), { ...body, text, today, now })
     return NextResponse.json(parsed)
   } catch (e: any) {
-    return NextResponse.json({ message: e.message || 'AI 解析异常' }, { status: 502 })
+    return NextResponse.json({ message: friendlyErrorMessage(e, '智能解析异常') }, { status: 502 })
   }
 }
