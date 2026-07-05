@@ -21,6 +21,8 @@ DB_PORT=5432
 DB_NAME=myMoney
 DB_USER=myMoney
 DB_PASSWORD=******
+DB_POOL_MAX=5
+JWT_SECRET=replace-with-a-long-random-secret
 AI_BASE_URL=https://api.openai.com/v1
 AI_API_KEY=******
 AI_MODEL=gpt-4o-mini
@@ -38,6 +40,8 @@ AI_MODEL=gpt-4o-mini
 
 AI 接口使用 OpenAI 兼容的 `chat/completions` 协议：
 
+- `DB_POOL_MAX`: 数据库连接池最大连接数，未配置时默认 `5`。
+- `JWT_SECRET`: 登录 token 签名密钥，生产环境必须配置为足够长的随机字符串。
 - `AI_BASE_URL`: API 地址，例如 `https://api.openai.com/v1` 或你的中转地址。
 - `AI_API_KEY`: API Key。
 - `AI_MODEL`: 解析模型，默认示例为 `gpt-4o-mini`。
