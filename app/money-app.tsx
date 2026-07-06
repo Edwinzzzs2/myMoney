@@ -17,6 +17,7 @@ import { SmartDialog } from '@/app/components/money/smart-dialog'
 import { DesktopNav, BottomNav, MoneyTopBar } from '@/app/components/money/nav'
 import { toast } from 'sonner'
 import type {
+  AiParseResponse,
   AiParsedExpense,
   BootstrapData,
   Category,
@@ -131,7 +132,7 @@ export function MoneyApp() {
   const [smartOpen, setSmartOpen] = useState(false)
   const [smartMode, setSmartMode] = useState<SmartMode>('text')
   const [smartText, setSmartText] = useState('')
-  const [smartDraft, setSmartDraft] = useState<ExpenseFormState | null>(null)
+  const [smartDrafts, setSmartDrafts] = useState<ExpenseFormState[]>([])
   const [smartUsage, setSmartUsage] = useState<SmartAiUsage | null>(null)
   const [listening, setListening] = useState(false)
   const [analyzing, setAnalyzing] = useState(false)
@@ -290,7 +291,7 @@ export function MoneyApp() {
       setForm((current) => ({
         ...current,
         category_id: current.category_id || data.categories.find((item) => item.is_active)?.id || '',
-        trip_id: data.trips.some((trip) => trip.id === current.trip_id) ? current.trip_id : preferredTripId,
+        trip_id: preferredTripId,
         payment_method: current.id ? current.payment_method : normalizePaymentMethod(current.payment_method, nextActivePaymentMethods),
         invoice_status: current.id ? current.invoice_status : normalizeInvoiceStatus(current.invoice_status, nextActiveInvoiceStatuses),
       }))
@@ -423,9 +424,11 @@ export function MoneyApp() {
     setEditingExpenseForm((current) => (current ? { ...current, ...patch } : current))
   }
 
-  function patchSmartDraft(patch: Partial<ExpenseFormState>) {
+  function patchSmartDraft(index: number, patch: Partial<ExpenseFormState>) {
     if (patch.trip_id !== undefined) rememberPreferredTripId(patch.trip_id)
-    setSmartDraft((current) => (current ? { ...current, ...patch } : current))
+    setSmartDrafts((current) => current.map((draft, draftIndex) => (
+      draftIndex === index ? { ...draft, ...patch } : draft
+    )))
   }
 
   function getPreferredTripId(nextTrips = trips) {
@@ -503,7 +506,7 @@ export function MoneyApp() {
       await loadData()
       toast.success(wasEditing ? '账单已保存' : '账单添加成功')
       setForm(makeAccountBlankForm(activeCategories[0]?.id || '', nextTripId))
-      setSmartDraft(null)
+      setSmartDrafts([])
       setSmartText('')
       setSmartOpen(false)
     } catch (e: any) {
@@ -1077,7 +1080,7 @@ export function MoneyApp() {
       .replace(/\s+/g, ' ')
       .trim()
     return {
-      ...makeBlankForm(categoryId, form.trip_id || getPreferredTripId(trips)),
+      ...makeBlankForm(categoryId, getPreferredTripId(trips)),
       amount: amount > 0 ? String(amount) : '',
       title: title || category?.name || '出差支出',
       expense_date: date,
@@ -1090,8 +1093,9 @@ export function MoneyApp() {
 
   function normalizeAiDraft(parsed: AiParsedExpense, sourceText = smartText) {
     return {
-      ...makeBlankForm(parsed.category_id || activeCategories[0]?.id || '', parsed.trip_id || form.trip_id || getPreferredTripId(trips)),
+      ...makeBlankForm(parsed.category_id || activeCategories[0]?.id || '', getPreferredTripId(trips)),
       ...parsed,
+      trip_id: getPreferredTripId(trips),
       amount: parsed.amount === undefined || parsed.amount === null ? '' : String(parsed.amount),
       merchant: parsed.merchant || '',
       note: parsed.note || sourceText,
@@ -1115,6 +1119,10 @@ export function MoneyApp() {
   async function analyzeSmartText(inputText = smartText) {
     const text = inputText.trim()
     if (!text) return
+    if (text.length > 200) {
+      setError('单次输入最多 200 字')
+      return
+    }
     if (smartUsage?.daily_remaining === 0) {
       setError(`今天的智能记账次数已用完（每天最多 ${smartUsage.daily_limit} 次），请明天再试。`)
       return
@@ -1122,7 +1130,7 @@ export function MoneyApp() {
     setAnalyzing(true)
     setError('')
     try {
-      const parsed = await fetchJson<AiParsedExpense>('/api/ai/parse-expense', {
+      const parsed = await fetchJson<AiParseResponse | AiParsedExpense>('/api/ai/parse-expense', {
         method: 'POST',
         body: JSON.stringify({
           text,
@@ -1130,39 +1138,47 @@ export function MoneyApp() {
           now: nowTime(),
           categories: activeCategories.map((c) => ({ id: c.id, name: c.name })),
           trips: trips.map((t) => ({ id: t.id, name: t.name, destination: t.destination })),
-          default_trip_id: form.trip_id || getPreferredTripId(trips),
+          default_trip_id: getPreferredTripId(trips),
         }),
       })
-      const { ai_usage, ...expenseDraft } = parsed
-      if (ai_usage) setSmartUsage(ai_usage)
-      setSmartDraft(normalizeAiDraft(expenseDraft, text))
-      setVoiceStatus('智能解析已完成，请确认账单明细')
+      const aiUsage = parsed.ai_usage
+      const parsedExpenses = 'expenses' in parsed && Array.isArray(parsed.expenses)
+        ? parsed.expenses
+        : [parsed]
+      if (aiUsage) setSmartUsage(aiUsage)
+      setSmartDrafts(parsedExpenses.map((expenseDraft) => (
+        normalizeAiDraft(expenseDraft, text)
+      )))
+      setVoiceStatus(`智能解析已完成，共 ${parsedExpenses.length} 笔，请确认账单明细`)
     } catch (e: any) {
       if (smartUsage && friendlyErrorMessage(e, '').includes('次数已用完')) {
         setSmartUsage({ ...smartUsage, daily_remaining: 0 })
       }
       void loadSmartUsage()
-      setSmartDraft(parseSmartRecord(text))
+      const sourceLines = text.split(/\r?\n/).map((line) => line.trim()).filter(Boolean)
+      setSmartDrafts(sourceLines.map(parseSmartRecord))
       setError(`${friendlyErrorMessage(e, '智能解析不可用')}，已使用本地规则兜底`)
-      setVoiceStatus('智能解析暂不可用，已用本地规则生成草稿')
+      setVoiceStatus(`智能解析暂不可用，已用本地规则生成 ${sourceLines.length} 笔草稿`)
     } finally {
       setAnalyzing(false)
     }
   }
 
-  async function addSmartDraft() {
-    if (!smartDraft) return
+  async function addSmartDrafts() {
+    if (!smartDrafts.length) return
     setSaving(true)
     setError('')
     try {
-      await fetchJson<Expense>('/api/expenses', {
+      await fetchJson<{ createdCount: number }>('/api/expenses/batch', {
         method: 'POST',
-        body: JSON.stringify(formToPayload(smartDraft)),
+        body: JSON.stringify({
+          expenses: smartDrafts.map(formToPayload),
+        }),
       })
       await loadData()
-      toast.success('账单添加成功')
+      toast.success(`${smartDrafts.length} 笔账单添加成功`)
       setForm(makeAccountBlankForm(activeCategories[0]?.id || '', getPreferredTripId(trips)))
-      setSmartDraft(null)
+      setSmartDrafts([])
       setSmartText('')
       setSmartOpen(false)
       setActiveTab('record')
@@ -1226,7 +1242,7 @@ export function MoneyApp() {
     recognition.continuous = true
     recognition.maxAlternatives = 1
     recognition.onstart = () => {
-      setSmartDraft(null)
+      setSmartDrafts([])
       setListening(true)
       startVoiceTimer()
       setVoiceStatus('浏览器实时识别已启动')
@@ -1239,7 +1255,7 @@ export function MoneyApp() {
       if (!transcript) return
       voiceRecognizedTextRef.current = transcript
       setSmartText(transcript)
-      setSmartDraft(null)
+      setSmartDrafts([])
       setVoiceStatus('已识别到文字，讲完后点完成解析')
     }
     recognition.onerror = () => {
@@ -1260,7 +1276,7 @@ export function MoneyApp() {
     setSmartMode('voice')
     setSmartOpen(true)
     void loadSmartUsage()
-    setSmartDraft(null)
+    setSmartDrafts([])
     setError('')
     setVoiceStatus('正在请求浏览器语音识别权限...')
     voiceSessionStartTextRef.current = smartText
@@ -1275,7 +1291,7 @@ export function MoneyApp() {
     setSmartMode('text')
     setSmartOpen(true)
     void loadSmartUsage()
-    setSmartDraft(null)
+    setSmartDrafts([])
     setError('')
     setVoiceStatus('正在请求浏览器语音识别权限...')
     voiceSessionStartTextRef.current = smartText
@@ -1611,7 +1627,7 @@ export function MoneyApp() {
         smartOpen={smartOpen}
         smartMode={smartMode}
         smartText={smartText}
-        smartDraft={smartDraft}
+        smartDrafts={smartDrafts}
         smartUsage={smartUsage}
         listening={listening}
         analyzing={analyzing}
@@ -1625,7 +1641,7 @@ export function MoneyApp() {
         onClose={closeSmartDialog}
         onSmartTextChange={(text) => {
           setSmartText(text)
-          setSmartDraft(null)
+          setSmartDrafts([])
         }}
         onDiscardVoiceSession={discardVoiceSession}
         onStartInlineSpeech={startInlineSpeech}
@@ -1634,7 +1650,7 @@ export function MoneyApp() {
         onCompleteVoiceAndAnalyze={completeVoiceAndAnalyze}
         onAnalyzeSmartText={() => { discardVoiceSession(); void analyzeSmartText() }}
         onPatchSmartDraft={patchSmartDraft}
-        onAddSmartDraft={addSmartDraft}
+        onAddSmartDrafts={addSmartDrafts}
       />
     </main>
   )

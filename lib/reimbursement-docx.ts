@@ -137,7 +137,7 @@ function buildDocumentXml(trip: TripForExport, receiptImages: ExportImage[], scr
   const bodyParts: string[] = []
   appendReceiptRows(bodyParts, receiptImages)
   if (receiptImages.length && screenshotImages.length) {
-    bodyParts.push(buildSpacerParagraph())
+    bodyParts.push(buildSpacerParagraphs())
   }
   appendScreenshotRows(bodyParts, screenshotImages)
 
@@ -156,13 +156,20 @@ function buildDocumentXml(trip: TripForExport, receiptImages: ExportImage[], scr
 }
 
 function appendReceiptRows(parts: string[], images: ExportImage[]) {
-  for (const image of images) {
+  for (let index = 0; index < images.length; index++) {
+    if (index > 0) {
+      parts.push(buildSpacerParagraphs())
+    }
+    const image = images[index]
     parts.push(buildReceiptParagraph(image))
   }
 }
 
 function appendScreenshotRows(parts: string[], images: ExportImage[]) {
   for (let index = 0; index < images.length; index += 2) {
+    if (index > 0) {
+      parts.push(buildSpacerParagraphs())
+    }
     parts.push(buildScreenshotTableRow(images.slice(index, index + 2)))
   }
 }
@@ -173,7 +180,7 @@ function buildReceiptParagraph(image: ExportImage) {
   return `<w:p>
       <w:pPr>
         <w:jc w:val="center"/>
-        <w:spacing w:before="0" w:after="100" w:line="240" w:lineRule="auto"/>
+        <w:spacing w:before="0" w:after="0" w:line="240" w:lineRule="auto"/>
       </w:pPr>
       ${buildDrawingRun(image, size.widthCm, size.heightCm)}
     </w:p>`
@@ -209,12 +216,7 @@ function buildScreenshotTableRow(images: ExportImage[]) {
       <w:tr>
         ${cells}
       </w:tr>
-    </w:tbl>
-    <w:p>
-      <w:pPr>
-        <w:spacing w:before="0" w:after="100" w:line="240" w:lineRule="auto"/>
-      </w:pPr>
-    </w:p>`
+    </w:tbl>`
 }
 
 function buildScreenshotCell(image?: ExportImage) {
@@ -244,12 +246,15 @@ function buildScreenshotCell(image?: ExportImage) {
         </w:tc>`
 }
 
-function buildSpacerParagraph() {
-  return `<w:p>
+function buildSpacerParagraphs() {
+  const paragraph = `<w:p>
       <w:pPr>
-        <w:spacing w:before="120" w:after="120" w:line="240" w:lineRule="auto"/>
+        <w:spacing w:before="0" w:after="0" w:line="240" w:lineRule="auto"/>
       </w:pPr>
     </w:p>`
+
+  return `${paragraph}
+    ${paragraph}`
 }
 
 function buildDrawingRun(image: ExportImage, widthCm: number, heightCm: number) {

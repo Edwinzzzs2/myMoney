@@ -98,7 +98,7 @@ function getChatCompletionsUrl(baseUrl: string) {
   return `${trimmed}/v1/chat/completions`
 }
 
-function extractJson(text: string) {
+function extractJson(text: string): unknown {
   const cleaned = text
     .trim()
     .replace(/^```(?:json)?/i, '')
@@ -117,12 +117,22 @@ function extractJson(text: string) {
   }
 }
 
+function getParsedExpenses(value: unknown): ParsedExpense[] {
+  if (value && typeof value === 'object') {
+    const result = value as { expenses?: unknown }
+    if (Array.isArray(result.expenses)) return result.expenses as ParsedExpense[]
+  }
+  throw new Error('智能解析返回内容格式不正确')
+}
+
 function normalizeParsedExpense(raw: ParsedExpense, request: Required<Pick<ParseRequest, 'today' | 'now'>> & ParseRequest) {
   const categories = request.categories || []
   const trips = request.trips || []
   const amount = Number(raw.amount)
   const categoryId = raw.category_id && categories.some((item) => item.id === String(raw.category_id)) ? String(raw.category_id) : categories[0]?.id || ''
-  const tripId = raw.trip_id && trips.some((item) => item.id === String(raw.trip_id)) ? String(raw.trip_id) : request.default_trip_id || trips[0]?.id || ''
+  const tripId = request.default_trip_id && trips.some((item) => item.id === String(request.default_trip_id))
+    ? String(request.default_trip_id)
+    : trips[0]?.id || ''
   const invoiceStatus = allowedInvoiceStatus.has(String(raw.invoice_status)) ? String(raw.invoice_status) : 'pending'
   const reimbursementStatus = allowedReimbursementStatus.has(String(raw.reimbursement_status)) ? String(raw.reimbursement_status) : 'pending'
 
@@ -172,7 +182,9 @@ export async function POST(req: NextRequest) {
   if (!text) {
     return NextResponse.json({ message: '请提供要解析的语音文字' }, { status: 400 })
   }
-
+  if (text.length > 200) {
+    return NextResponse.json({ message: '单次输入最多 200 字' }, { status: 400 })
+  }
   const today = body.today || new Date().toISOString().slice(0, 10)
   const now = body.now || new Date().toTimeString().slice(0, 5)
   const categories = body.categories || []
@@ -181,12 +193,15 @@ export async function POST(req: NextRequest) {
   const dailyLimit = getDailyLimit()
 
   const systemPrompt =
-    '你是出差报销记账助手。把用户口述的中文账单解析为 JSON。只返回 JSON，不要解释。' +
+    '你是出差报销记账助手。请将整段输入一次性解析为多个账单对象，每个独立消费事件对应一笔账单并保持原顺序。' +
+    '账单之间可能使用换行、逗号、顿号、分号、句号或连续自然语言分隔；同一行可以包含多笔账单，不能按输入行数决定账单数量。' +
+    '只返回 JSON 对象，不要解释。返回格式必须是 {"expenses":[...]}，不能合并或遗漏任何一笔独立消费。' +
     '金额用数字，日期用 YYYY-MM-DD，时间用 HH:mm。' +
+    '每笔账单的 note 应填写该笔消费在输入中的对应原始描述片段。' +
     'invoice_status 只能是 pending/received/none，reimbursement_status 只能是 pending/reimbursed。' +
     '如果用户提到已开票/有发票/发票到了，用 received；无票/没有发票用 none；否则 pending。' +
     '如果用户提到已报销，用 reimbursed；否则 reimbursement_status 默认 pending。默认 payment_method 是 个人垫付，默认 reimbursable 是 true。' +
-    'category_id 必须从给定分类中选择，trip_id 必须从给定行程中选择；不确定则用默认或第一个。'
+    'category_id 必须从给定分类中选择。trip_id 必须始终使用 default_trip_id；如果 default_trip_id 为空，才使用给定行程中的第一个。'
 
   const userPrompt = JSON.stringify({
     text,
@@ -196,19 +211,21 @@ export async function POST(req: NextRequest) {
     trips,
     default_trip_id: body.default_trip_id || trips[0]?.id || '',
     output_schema: {
-      amount: 'number',
-      title: 'string',
-      merchant: 'string',
-      category_id: 'string',
-      trip_id: 'string',
-      expense_date: 'YYYY-MM-DD',
-      expense_time: 'HH:mm',
-      payment_method: 'string',
-      invoice_status: 'pending | received | none',
-      reimbursement_status: 'pending | reimbursed',
-      reimbursable: 'boolean',
-      note: 'string',
-      receipt_url: 'string',
+      expenses: [{
+        amount: 'number',
+        title: 'string',
+        merchant: 'string',
+        category_id: 'string',
+        trip_id: 'string',
+        expense_date: 'YYYY-MM-DD',
+        expense_time: 'HH:mm',
+        payment_method: 'string',
+        invoice_status: 'pending | received | none',
+        reimbursement_status: 'pending | reimbursed',
+        reimbursable: 'boolean',
+        note: 'string',
+        receipt_url: 'string',
+      }],
     },
   })
 
@@ -264,10 +281,17 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ message: '智能解析没有返回内容' }, { status: 502 })
     }
 
-    const parsed = normalizeParsedExpense(extractJson(content), { ...body, text, today, now })
+    const rawExpenses = getParsedExpenses(extractJson(content))
+    if (!rawExpenses.length || rawExpenses.length > 100) {
+      throw new Error('智能解析返回的账单数量不正确')
+    }
+    const expenses = rawExpenses.map((expense) => normalizeParsedExpense(
+      expense,
+      { ...body, text, today, now }
+    ))
     const dailyRemaining = Math.max(dailyLimit - usageCount, 0)
     return NextResponse.json({
-      ...parsed,
+      expenses,
       ai_usage: {
         daily_limit: dailyLimit,
         daily_remaining: dailyRemaining,

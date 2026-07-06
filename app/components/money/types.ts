@@ -89,6 +89,11 @@ export type AiParsedExpense = Omit<Partial<ExpenseFormState>, 'amount'> & {
   ai_usage?: SmartAiUsage
 }
 
+export type AiParseResponse = {
+  expenses: AiParsedExpense[]
+  ai_usage?: SmartAiUsage
+}
+
 export type SmartAiUsage = {
   daily_limit: number
   daily_remaining: number
