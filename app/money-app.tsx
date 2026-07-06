@@ -1046,51 +1046,6 @@ export function MoneyApp() {
   }
 
   // ─── 智能/语音记账 ────────────────────────────────────────
-  function inferCategoryId(text: string) {
-    const lower = text.toLowerCase()
-    const rules = [
-      { keys: ['餐', '饭', '面', '咖啡', '奶茶', '早餐', '午餐', '晚餐'], name: '餐饮' },
-      { keys: ['打车', '地铁', '公交', '停车', '高速', '油费', '交通'], name: '交通' },
-      { keys: ['酒店', '住宿', '宾馆', '民宿'], name: '住宿' },
-      { keys: ['机票', '高铁', '火车', '飞机', '航班'], name: '机票高铁' },
-      { keys: ['办公', '文具', '打印', '设备'], name: '办公采购' },
-      { keys: ['流量', '电话', '网络', '话费'], name: '通讯网络' },
-      { keys: ['招待', '客户', '请客'], name: '招待' },
-    ]
-    const matched = rules.find((rule) => rule.keys.some((key) => lower.includes(key)))
-    return activeCategories.find((item) => item.name === matched?.name)?.id || activeCategories[0]?.id || ''
-  }
-
-  function parseSmartRecord(text: string) {
-    const normalized = text.trim()
-    const prefixed = normalized.match(/[¥￥]\s*(\d+(?:\.\d{1,2})?)/)
-    const suffixed = normalized.match(/(\d+(?:\.\d{1,2})?)\s*(元|块|rmb|RMB)/)
-    const allNumbers = Array.from(normalized.matchAll(/\d+(?:\.\d{1,2})?/g)).map((item) => Number(item[0]))
-    const amount = Number(prefixed?.[1] || suffixed?.[1] || Math.max(0, ...allNumbers))
-    const categoryId = inferCategoryId(normalized)
-    const category = activeCategories.find((item) => item.id === categoryId)
-    let date = todayISO()
-    if (normalized.includes('昨天')) { const d = new Date(); d.setDate(d.getDate() - 1); date = d.toISOString().slice(0, 10) }
-    if (normalized.includes('前天')) { const d = new Date(); d.setDate(d.getDate() - 2); date = d.toISOString().slice(0, 10) }
-    const monthDay = normalized.match(/(\d{1,2})月(\d{1,2})[日号]?/)
-    if (monthDay) { const year = new Date().getFullYear(); date = `${year}-${monthDay[1].padStart(2, '0')}-${monthDay[2].padStart(2, '0')}` }
-    const title = normalized
-      .replace(/[¥￥]?\s*\d+(?:\.\d{1,2})?\s*(元|块|rmb|RMB)?/g, '')
-      .replace(/今天|昨天|前天|报销|出差|开票|发票/g, '')
-      .replace(/\s+/g, ' ')
-      .trim()
-    return {
-      ...makeBlankForm(categoryId, getPreferredTripId(trips)),
-      amount: amount > 0 ? String(amount) : '',
-      title: title || category?.name || '出差支出',
-      expense_date: date,
-      expense_time: nowTime(),
-      payment_method: getDefaultPaymentMethod(),
-      invoice_status: normalizeInvoiceStatus(normalized.includes('无票') ? 'none' : normalized.includes('发票') || normalized.includes('开票') ? 'received' : 'pending'),
-      note: normalized,
-    }
-  }
-
   function normalizeAiDraft(parsed: AiParsedExpense, sourceText = smartText) {
     return {
       ...makeBlankForm(parsed.category_id || activeCategories[0]?.id || '', getPreferredTripId(trips)),
@@ -1155,10 +1110,10 @@ export function MoneyApp() {
         setSmartUsage({ ...smartUsage, daily_remaining: 0 })
       }
       void loadSmartUsage()
-      const sourceLines = text.split(/\r?\n/).map((line) => line.trim()).filter(Boolean)
-      setSmartDrafts(sourceLines.map(parseSmartRecord))
-      setError(`${friendlyErrorMessage(e, '智能解析不可用')}，已使用本地规则兜底`)
-      setVoiceStatus(`智能解析暂不可用，已用本地规则生成 ${sourceLines.length} 笔草稿`)
+      setSmartDrafts([])
+      const message = e instanceof Error ? e.message : String(e || 'AI 解析失败')
+      setError(message)
+      setVoiceStatus(message)
     } finally {
       setAnalyzing(false)
     }

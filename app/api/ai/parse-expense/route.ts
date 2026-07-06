@@ -108,21 +108,44 @@ function extractJson(text: string): unknown {
   try {
     return JSON.parse(cleaned)
   } catch {
-    const start = cleaned.indexOf('{')
-    const end = cleaned.lastIndexOf('}')
-    if (start >= 0 && end > start) {
-      return JSON.parse(cleaned.slice(start, end + 1))
+    const objectStart = cleaned.indexOf('{')
+    const objectEnd = cleaned.lastIndexOf('}')
+    if (objectStart >= 0 && objectEnd > objectStart) {
+      return JSON.parse(cleaned.slice(objectStart, objectEnd + 1))
+    }
+    const arrayStart = cleaned.indexOf('[')
+    const arrayEnd = cleaned.lastIndexOf(']')
+    if (arrayStart >= 0 && arrayEnd > arrayStart) {
+      return JSON.parse(cleaned.slice(arrayStart, arrayEnd + 1))
     }
     throw new Error('智能解析返回内容格式不正确')
   }
 }
 
 function getParsedExpenses(value: unknown): ParsedExpense[] {
+  if (Array.isArray(value)) return value as ParsedExpense[]
   if (value && typeof value === 'object') {
     const result = value as { expenses?: unknown }
     if (Array.isArray(result.expenses)) return result.expenses as ParsedExpense[]
+    if (result.expenses && typeof result.expenses === 'object') {
+      return [result.expenses as ParsedExpense]
+    }
+    const expense = value as ParsedExpense
+    if (expense.amount !== undefined || expense.title !== undefined) return [expense]
   }
   throw new Error('智能解析返回内容格式不正确')
+}
+
+function getUpstreamErrorMessage(detail: string, status: number) {
+  const normalized = detail.trim()
+  if (!normalized) return `AI 服务请求失败（${status}）`
+  try {
+    const parsed = JSON.parse(normalized)
+    const upstreamMessage = parsed?.error?.message || parsed?.message || parsed?.error || parsed
+    return typeof upstreamMessage === 'string' ? upstreamMessage : JSON.stringify(upstreamMessage)
+  } catch {
+    return normalized
+  }
 }
 
 function normalizeParsedExpense(raw: ParsedExpense, request: Required<Pick<ParseRequest, 'today' | 'now'>> & ParseRequest) {
@@ -195,6 +218,8 @@ export async function POST(req: NextRequest) {
   const systemPrompt =
     '你是出差报销记账助手。请将整段输入一次性解析为多个账单对象，每个独立消费事件对应一笔账单并保持原顺序。' +
     '账单之间可能使用换行、逗号、顿号、分号、句号或连续自然语言分隔；同一行可以包含多笔账单，不能按输入行数决定账单数量。' +
+    '语音识别文本可能完全没有标点，请结合每个金额及“元、块”等单位、消费名称变化和时间日期变化主动拆分。' +
+    '例如“今天午饭35元打车去机场56元咖啡18元”必须解析为午饭、打车、咖啡三笔账单。' +
     '只返回 JSON 对象，不要解释。返回格式必须是 {"expenses":[...]}，不能合并或遗漏任何一笔独立消费。' +
     '金额用数字，日期用 YYYY-MM-DD，时间用 HH:mm。' +
     '每笔账单的 note 应填写该笔消费在输入中的对应原始描述片段。' +
@@ -266,19 +291,25 @@ export async function POST(req: NextRequest) {
     })
 
     let response = await callAi(true)
-    if (!response.ok && response.status === 400) {
+    if (!response.ok && [400, 408, 500, 502, 503, 504].includes(response.status)) {
       response = await callAi(false)
     }
 
     if (!response.ok) {
       const detail = await response.text().catch(() => '')
-      return NextResponse.json({ message: `智能解析失败：${response.status}`, detail: detail.slice(0, 500) }, { status: 502 })
+      return NextResponse.json(
+        {
+          message: getUpstreamErrorMessage(detail, response.status),
+          upstream_status: response.status,
+        },
+        { status: 502 }
+      )
     }
 
     const data = await response.json()
     const content = data?.choices?.[0]?.message?.content
     if (!content) {
-      return NextResponse.json({ message: '智能解析没有返回内容' }, { status: 502 })
+      return NextResponse.json({ message: 'AI 没有返回可解析的内容，请重试' }, { status: 502 })
     }
 
     const rawExpenses = getParsedExpenses(extractJson(content))
@@ -303,6 +334,7 @@ export async function POST(req: NextRequest) {
       },
     })
   } catch (e: any) {
-    return NextResponse.json({ message: friendlyErrorMessage(e, '智能解析异常') }, { status: 502 })
+    const message = e instanceof Error ? e.message : String(e || '智能解析异常')
+    return NextResponse.json({ message }, { status: 502 })
   }
 }
