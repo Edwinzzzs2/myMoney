@@ -1,3 +1,5 @@
+import type { MouseEvent } from 'react'
+
 import { ImageIcon, ReceiptText, Trash2 } from 'lucide-react'
 
 import { Badge } from '@/components/ui/badge'
@@ -49,13 +51,18 @@ export function ExpenseRow({
     }
     onEdit(expense)
   }
+  const handleRowClick = (event: MouseEvent<HTMLElement>) => {
+    // Radix 弹窗通过 Portal 渲染，遮罩点击仍会沿 React 组件树冒泡到当前账单行。
+    if (!event.currentTarget.contains(event.target as Node)) return
+    handleRowAction()
+  }
 
   return (
     <article
       role="button"
       tabIndex={0}
       aria-pressed={selectable ? selected : undefined}
-      onClick={handleRowAction}
+      onClick={handleRowClick}
       onKeyDown={(event) => {
         if (event.key !== 'Enter' && event.key !== ' ') return
         event.preventDefault()
