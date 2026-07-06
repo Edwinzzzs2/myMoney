@@ -4,7 +4,7 @@ import { ImageIcon, ReceiptText, Trash2 } from 'lucide-react'
 
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Dialog, DialogContent, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
+import { Dialog, DialogClose, DialogContent, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { cn } from '@/lib/utils'
 
 import type { Expense } from './types'
@@ -125,7 +125,16 @@ export function ExpenseRow({
                     </DialogTrigger>
                     <DialogContent className="max-w-3xl max-h-[85vh] overflow-auto p-4 flex items-center justify-center border-slate-200 dark:border-white/10 bg-white dark:bg-[#121a22]" onClick={(e) => e.stopPropagation()}>
                       <DialogTitle className="sr-only">发票图片预览</DialogTitle>
-                      <img src={receiptUrl} alt="发票图片" className="max-w-full max-h-[75vh] object-contain rounded" />
+                      <DialogClose asChild>
+                        <button
+                          type="button"
+                          className="inline-flex max-h-[75vh] max-w-full cursor-zoom-out rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400"
+                          aria-label="关闭发票图片预览"
+                          title="关闭预览"
+                        >
+                          <img src={receiptUrl} alt="发票图片" className="max-h-[75vh] max-w-full rounded object-contain" />
+                        </button>
+                      </DialogClose>
                     </DialogContent>
                   </Dialog>
                 ) : null}
@@ -146,7 +155,16 @@ export function ExpenseRow({
                     </DialogTrigger>
                     <DialogContent className="max-w-3xl max-h-[85vh] overflow-auto p-4 flex items-center justify-center border-slate-200 dark:border-white/10 bg-white dark:bg-[#121a22]" onClick={(e) => e.stopPropagation()}>
                       <DialogTitle className="sr-only">消费截图预览</DialogTitle>
-                      <img src={screenshotUrl} alt="消费截图" className="max-w-full max-h-[75vh] object-contain rounded" />
+                      <DialogClose asChild>
+                        <button
+                          type="button"
+                          className="inline-flex max-h-[75vh] max-w-full cursor-zoom-out rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400"
+                          aria-label="关闭消费截图预览"
+                          title="关闭预览"
+                        >
+                          <img src={screenshotUrl} alt="消费截图" className="max-h-[75vh] max-w-full rounded object-contain" />
+                        </button>
+                      </DialogClose>
                     </DialogContent>
                   </Dialog>
                 ) : null}
